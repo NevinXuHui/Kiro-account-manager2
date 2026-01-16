@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Play, Square, RefreshCw, Copy, Check, Server, Users, Activity, AlertCircle, Globe, Zap } from 'lucide-react'
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label, Switch, Badge, Select } from '../ui'
 import { useAccountsStore } from '../../store/accounts'
+import { useTranslation } from '../../hooks/useTranslation'
 
 interface ProxyStats {
   totalRequests: number
@@ -23,6 +24,8 @@ interface ProxyConfig {
 }
 
 export function ProxyPanel() {
+  const { t } = useTranslation()
+  const isEn = t('common.unknown') === 'Unknown'
   const [isRunning, setIsRunning] = useState(false)
   const [config, setConfig] = useState<ProxyConfig>({
     enabled: false,
@@ -107,7 +110,7 @@ export function ProxyPanel() {
         setIsRunning(true)
         await fetchStatus()
       } else {
-        setError(result.error || '启动失败')
+        setError(result.error || (isEn ? 'Failed to start' : '启动失败'))
       }
     } catch (err) {
       setError((err as Error).message)
@@ -123,7 +126,7 @@ export function ProxyPanel() {
         setIsRunning(false)
         setStats(null)
       } else {
-        setError(result.error || '停止失败')
+        setError(result.error || (isEn ? 'Failed to stop' : '停止失败'))
       }
     } catch (err) {
       setError((err as Error).message)
@@ -222,9 +225,9 @@ export function ProxyPanel() {
                 <Server className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <CardTitle className="text-lg text-primary">Kiro API 反代</CardTitle>
+                <CardTitle className="text-lg text-primary">{isEn ? 'Kiro API Proxy' : 'Kiro API 反代'}</CardTitle>
                 <CardDescription>
-                  提供 OpenAI 和 Claude 兼容的 API 端点
+                  {isEn ? 'Provides OpenAI and Claude compatible API endpoints' : '提供 OpenAI 和 Claude 兼容的 API 端点'}
                 </CardDescription>
               </div>
             </div>
@@ -232,7 +235,7 @@ export function ProxyPanel() {
               variant={isRunning ? 'default' : 'secondary'} 
               className={isRunning ? 'bg-green-500 text-white' : 'bg-muted text-muted-foreground'}
             >
-              {isRunning ? '运行中' : '已停止'}
+              {isRunning ? (isEn ? 'Running' : '运行中') : (isEn ? 'Stopped' : '已停止')}
             </Badge>
           </div>
         </CardHeader>
@@ -242,17 +245,17 @@ export function ProxyPanel() {
             {!isRunning ? (
               <Button onClick={handleStart} className="gap-2">
                 <Play className="h-4 w-4" />
-                启动服务
+                {isEn ? 'Start Service' : '启动服务'}
               </Button>
             ) : (
               <Button onClick={handleStop} variant="destructive" className="gap-2">
                 <Square className="h-4 w-4" />
-                停止服务
+                {isEn ? 'Stop Service' : '停止服务'}
               </Button>
             )}
             <Button onClick={syncAccounts} variant="outline" className="gap-2" disabled={!isRunning}>
               <RefreshCw className="h-4 w-4" />
-              同步账号
+              {isEn ? 'Sync Accounts' : '同步账号'}
             </Button>
           </div>
 
@@ -267,7 +270,7 @@ export function ProxyPanel() {
           {/* 服务地址 */}
           {isRunning && (
             <div className="flex items-center gap-2">
-              <Label className="min-w-[80px]">服务地址:</Label>
+              <Label className="min-w-[80px]">{isEn ? 'Address:' : '服务地址:'}</Label>
               <code className="flex-1 px-3 py-2 bg-muted rounded text-sm">
                 http://{config.host}:{config.port}
               </code>
@@ -280,7 +283,7 @@ export function ProxyPanel() {
           {/* 配置 */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="port">端口</Label>
+              <Label htmlFor="port">{isEn ? 'Port' : '端口'}</Label>
               <Input
                 id="port"
                 type="number"
@@ -290,7 +293,7 @@ export function ProxyPanel() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="host">监听地址</Label>
+              <Label htmlFor="host">{isEn ? 'Host' : '监听地址'}</Label>
               <Input
                 id="host"
                 value={config.host}
@@ -302,16 +305,16 @@ export function ProxyPanel() {
 
           {/* API Key 配置 */}
           <div className="space-y-2">
-            <Label htmlFor="apiKey">API Key (可选)</Label>
+            <Label htmlFor="apiKey">{isEn ? 'API Key (Optional)' : 'API Key (可选)'}</Label>
             <Input
               id="apiKey"
               type="password"
-              placeholder="留空则不验证"
+              placeholder={isEn ? 'Leave empty to skip auth' : '留空则不验证'}
               value={config.apiKey || ''}
               onChange={(e) => setConfig(prev => ({ ...prev, apiKey: e.target.value || undefined }))}
               disabled={isRunning}
             />
-            <p className="text-xs text-muted-foreground">设置后，请求需要在 Authorization 或 X-Api-Key 头中提供此密钥</p>
+            <p className="text-xs text-muted-foreground">{isEn ? 'When set, requests must provide this key in Authorization or X-Api-Key header' : '设置后，请求需要在 Authorization 或 X-Api-Key 头中提供此密钥'}</p>
           </div>
 
           <div className="flex items-center justify-between">
@@ -322,7 +325,7 @@ export function ProxyPanel() {
                 onCheckedChange={(checked) => setConfig(prev => ({ ...prev, enableMultiAccount: checked }))}
                 disabled={isRunning}
               />
-              <Label htmlFor="multiAccount">多账号轮询</Label>
+              <Label htmlFor="multiAccount">{isEn ? 'Multi-Account Rotation' : '多账号轮询'}</Label>
             </div>
             <div className="flex items-center gap-2">
               <Switch
@@ -330,32 +333,32 @@ export function ProxyPanel() {
                 checked={config.logRequests}
                 onCheckedChange={(checked) => setConfig(prev => ({ ...prev, logRequests: checked }))}
               />
-              <Label htmlFor="logRequests">记录请求日志</Label>
+              <Label htmlFor="logRequests">{isEn ? 'Log Requests' : '记录请求日志'}</Label>
             </div>
           </div>
 
           {/* 高级配置 */}
           <div className="border-t border-border pt-4 mt-4">
-            <h4 className="text-sm font-medium mb-3 text-foreground">高级配置</h4>
+            <h4 className="text-sm font-medium mb-3 text-foreground">{isEn ? 'Advanced Settings' : '高级配置'}</h4>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="preferredEndpoint">首选端点</Label>
+                <Label htmlFor="preferredEndpoint">{isEn ? 'Preferred Endpoint' : '首选端点'}</Label>
                 <Select
                   value={config.preferredEndpoint || ''}
                   options={[
-                    { value: '', label: '自动选择', description: '根据可用性自动选择端点' },
-                    { value: 'codewhisperer', label: 'CodeWhisperer', description: 'IDE 模式端点' },
-                    { value: 'amazonq', label: 'AmazonQ', description: 'CLI 模式端点' }
+                    { value: '', label: isEn ? 'Auto Select' : '自动选择', description: isEn ? 'Auto select based on availability' : '根据可用性自动选择端点' },
+                    { value: 'codewhisperer', label: 'CodeWhisperer', description: isEn ? 'IDE mode endpoint' : 'IDE 模式端点' },
+                    { value: 'amazonq', label: 'AmazonQ', description: isEn ? 'CLI mode endpoint' : 'CLI 模式端点' }
                   ]}
                   onChange={(value) => setConfig(prev => ({ 
                     ...prev, 
                     preferredEndpoint: value as 'codewhisperer' | 'amazonq' | undefined || undefined
                   }))}
-                  placeholder="选择端点"
+                  placeholder={isEn ? 'Select endpoint' : '选择端点'}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="maxRetries">最大重试次数</Label>
+                <Label htmlFor="maxRetries">{isEn ? 'Max Retries' : '最大重试次数'}</Label>
                 <Input
                   id="maxRetries"
                   type="number"
@@ -380,7 +383,7 @@ export function ProxyPanel() {
                 <div className="p-1.5 rounded-lg bg-blue-500/10">
                   <Users className="h-4 w-4 text-blue-500" />
                 </div>
-                <span className="text-sm text-muted-foreground">账号池</span>
+                <span className="text-sm text-muted-foreground">{isEn ? 'Account Pool' : '账号池'}</span>
               </div>
               <div className="text-2xl font-bold text-foreground mt-1">{availableCount}/{accountCount}</div>
             </CardContent>
@@ -391,14 +394,14 @@ export function ProxyPanel() {
                 <div className="p-1.5 rounded-lg bg-purple-500/10">
                   <Activity className="h-4 w-4 text-purple-500" />
                 </div>
-                <span className="text-sm text-muted-foreground">总请求</span>
+                <span className="text-sm text-muted-foreground">{isEn ? 'Total Requests' : '总请求'}</span>
               </div>
               <div className="text-2xl font-bold text-foreground mt-1">{stats?.totalRequests || 0}</div>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-sm hover:shadow-md transition-shadow duration-200">
             <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">成功/失败</div>
+              <div className="text-sm text-muted-foreground">{isEn ? 'Success/Failed' : '成功/失败'}</div>
               <div className="text-2xl font-bold mt-1">
                 <span className="text-green-500">{stats?.successRequests || 0}</span>
                 <span className="text-muted-foreground mx-1">/</span>
@@ -408,7 +411,7 @@ export function ProxyPanel() {
           </Card>
           <Card className="border-0 shadow-sm hover:shadow-md transition-shadow duration-200 bg-gradient-to-br from-primary/5 to-transparent">
             <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">运行时间</div>
+              <div className="text-sm text-muted-foreground">{isEn ? 'Uptime' : '运行时间'}</div>
               <div className="text-2xl font-bold text-primary mt-1">{formatUptime(uptime)}</div>
             </CardContent>
           </Card>
@@ -422,39 +425,39 @@ export function ProxyPanel() {
             <div className="p-1.5 rounded-lg bg-primary/10">
               <Globe className="h-4 w-4 text-primary" />
             </div>
-            API 端点
+            {isEn ? 'API Endpoints' : 'API 端点'}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <div className="flex justify-between">
             <code className="text-muted-foreground">POST /v1/chat/completions</code>
-            <span>OpenAI 兼容</span>
+            <span>{isEn ? 'OpenAI Compatible' : 'OpenAI 兼容'}</span>
           </div>
           <div className="flex justify-between">
             <code className="text-muted-foreground">POST /v1/messages</code>
-            <span>Claude 兼容</span>
+            <span>{isEn ? 'Claude Compatible' : 'Claude 兼容'}</span>
           </div>
           <div className="flex justify-between">
             <code className="text-muted-foreground">GET /v1/models</code>
-            <span>模型列表</span>
+            <span>{isEn ? 'Model List' : '模型列表'}</span>
           </div>
           <div className="flex justify-between">
             <code className="text-muted-foreground">GET /health</code>
-            <span>健康检查</span>
+            <span>{isEn ? 'Health Check' : '健康检查'}</span>
           </div>
           <div className="border-t pt-2 mt-2">
-            <div className="text-xs text-muted-foreground mb-1">管理 API (需要 API Key)</div>
+            <div className="text-xs text-muted-foreground mb-1">{isEn ? 'Admin API (Requires API Key)' : '管理 API (需要 API Key)'}</div>
             <div className="flex justify-between">
               <code className="text-muted-foreground">GET /admin/stats</code>
-              <span>详细统计</span>
+              <span>{isEn ? 'Detailed Stats' : '详细统计'}</span>
             </div>
             <div className="flex justify-between">
               <code className="text-muted-foreground">GET /admin/accounts</code>
-              <span>账号列表</span>
+              <span>{isEn ? 'Account List' : '账号列表'}</span>
             </div>
             <div className="flex justify-between">
               <code className="text-muted-foreground">GET /admin/logs</code>
-              <span>请求日志</span>
+              <span>{isEn ? 'Request Logs' : '请求日志'}</span>
             </div>
           </div>
         </CardContent>
@@ -467,42 +470,42 @@ export function ProxyPanel() {
             <div className="p-1.5 rounded-lg bg-primary/10">
               <Zap className="h-4 w-4 text-primary" />
             </div>
-            支持的功能
+            {isEn ? 'Supported Features' : '支持的功能'}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <div className="flex items-center gap-2">
               <span className="text-primary">✓</span>
-              <span className="text-foreground">Token 自动刷新</span>
+              <span className="text-foreground">{isEn ? 'Auto Token Refresh' : 'Token 自动刷新'}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-primary">✓</span>
-              <span className="text-foreground">请求重试机制</span>
+              <span className="text-foreground">{isEn ? 'Request Retry' : '请求重试机制'}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-primary">✓</span>
-              <span className="text-foreground">多账号轮询</span>
+              <span className="text-foreground">{isEn ? 'Multi-Account Rotation' : '多账号轮询'}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-primary">✓</span>
-              <span className="text-foreground">IDC/Social 认证</span>
+              <span className="text-foreground">{isEn ? 'IDC/Social Auth' : 'IDC/Social 认证'}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-primary">✓</span>
-              <span className="text-foreground">Agentic 模式检测</span>
+              <span className="text-foreground">{isEn ? 'Agentic Mode Detection' : 'Agentic 模式检测'}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-primary">✓</span>
-              <span className="text-foreground">Thinking 模式支持</span>
+              <span className="text-foreground">{isEn ? 'Thinking Mode Support' : 'Thinking 模式支持'}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-primary">✓</span>
-              <span className="text-foreground">图像处理</span>
+              <span className="text-foreground">{isEn ? 'Image Processing' : '图像处理'}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-primary">✓</span>
-              <span className="text-foreground">使用量统计</span>
+              <span className="text-foreground">{isEn ? 'Usage Statistics' : '使用量统计'}</span>
             </div>
           </div>
         </CardContent>
@@ -516,7 +519,7 @@ export function ProxyPanel() {
               <div className="p-1.5 rounded-lg bg-orange-500/10">
                 <Activity className="h-4 w-4 text-orange-500" />
               </div>
-              最近请求
+              {isEn ? 'Recent Requests' : '最近请求'}
             </CardTitle>
           </CardHeader>
           <CardContent>
