@@ -4,8 +4,8 @@ import { electronAPI } from '@electron-toolkit/preload'
 // Custom APIs for renderer
 const api = {
   // 打开外部链接
-  openExternal: (url: string): void => {
-    ipcRenderer.send('open-external', url)
+  openExternal: (url: string, usePrivateMode?: boolean): void => {
+    ipcRenderer.send('open-external', url, usePrivateMode)
   },
 
   // 获取应用版本
@@ -131,10 +131,16 @@ const api = {
     clientId: string
     clientSecret: string
     region?: string
+    startUrl?: string
     authMethod?: 'IdC' | 'social'
-    provider?: 'BuilderId' | 'Github' | 'Google'
+    provider?: 'BuilderId' | 'Github' | 'Google' | 'Enterprise'
   }): Promise<{ success: boolean; error?: string }> => {
     return ipcRenderer.invoke('switch-account', credentials)
+  },
+
+  // 退出登录 - 清除本地 SSO 缓存
+  logoutAccount: (): Promise<{ success: boolean; deletedCount?: number; error?: string }> => {
+    return ipcRenderer.invoke('logout-account')
   },
 
   // 文件操作 - 导出到文件
@@ -260,13 +266,11 @@ const api = {
     return ipcRenderer.invoke('cancel-builder-id-login')
   },
 
-  // 启动 IAM Identity Center SSO 登录
+  // 启动 IAM Identity Center SSO 登录 (Authorization Code flow)
   startIamSsoLogin: (startUrl: string, region?: string): Promise<{
     success: boolean
-    userCode?: string
-    verificationUri?: string
+    authorizeUrl?: string
     expiresIn?: number
-    interval?: number
     error?: string
   }> => {
     return ipcRenderer.invoke('start-iam-sso-login', startUrl, region || 'us-east-1')
@@ -286,6 +290,21 @@ const api = {
     error?: string
   }> => {
     return ipcRenderer.invoke('poll-iam-sso-auth', region || 'us-east-1')
+  },
+
+  // 完成 IAM SSO 登录 (用授权码换取 token)
+  completeIamSsoLogin: (code: string): Promise<{
+    success: boolean
+    completed?: boolean
+    accessToken?: string
+    refreshToken?: string
+    clientId?: string
+    clientSecret?: string
+    region?: string
+    expiresIn?: number
+    error?: string
+  }> => {
+    return ipcRenderer.invoke('complete-iam-sso-login', code)
   },
 
   // 取消 IAM SSO 登录

@@ -1682,6 +1682,7 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
           clientId: availableAccount.credentials.clientId || '',
           clientSecret: availableAccount.credentials.clientSecret || '',
           region: availableAccount.credentials.region || 'us-east-1',
+          startUrl: availableAccount.credentials.startUrl,
           authMethod: availableAccount.credentials.authMethod,
           provider: availableAccount.credentials.provider
         })

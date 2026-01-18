@@ -178,6 +178,7 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
     clientId?: string
     clientSecret?: string
     region?: string
+    startUrl?: string
     authMethod?: string
     provider?: string
   }) => {
@@ -218,6 +219,7 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
             clientId: tokenData.clientId || '',
             clientSecret: tokenData.clientSecret || '',
             region: tokenData.region || 'us-east-1',
+            startUrl: tokenData.startUrl,
             expiresAt: result.data.expiresIn ? now + result.data.expiresIn * 1000 : now + 3600 * 1000,
             authMethod: tokenData.authMethod as 'IdC' | 'social',
             provider: (tokenData.provider || 'BuilderId') as 'BuilderId' | 'Github' | 'Google'
@@ -281,8 +283,8 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
           interval: result.interval || 5
         })
 
-        // 打开浏览器
-        window.api.openExternal(result.verificationUri)
+        // 打开浏览器（支持隐私模式）
+        window.api.openExternal(result.verificationUri, usePrivateMode)
 
         // 开始轮询
         startPolling(result.interval || 5)
@@ -296,7 +298,7 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
     }
   }
 
-  // 启动 IAM SSO 登录
+  // 启动 IAM SSO 登录 (Authorization Code flow)
   const handleStartIamSsoLogin = async () => {
     if (!ssoStartUrl.trim()) {
       setError(isEn ? 'Please enter SSO Start URL' : '请输入 SSO Start URL')
@@ -310,19 +312,20 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
     try {
       const result = await window.api.startIamSsoLogin(ssoStartUrl.trim(), region)
       
-      if (result.success && result.userCode && result.verificationUri) {
+      if (result.success && result.authorizeUrl) {
+        // 设置登录数据（用于显示等待状态）
         setIamSsoLoginData({
-          userCode: result.userCode,
-          verificationUri: result.verificationUri,
+          userCode: '',
+          verificationUri: result.authorizeUrl,
           expiresIn: result.expiresIn || 600,
-          interval: result.interval || 5
+          interval: 3
         })
 
-        // 打开浏览器
-        window.api.openExternal(result.verificationUri)
+        // 打开浏览器（支持隐私模式）
+        window.api.openExternal(result.authorizeUrl, usePrivateMode)
 
-        // 开始轮询
-        startIamSsoPolling(result.interval || 5)
+        // 开始轮询（等待服务器回调自动完成 token 交换）
+        startIamSsoPolling(3)
       } else {
         setError(result.error || (isEn ? 'Failed to start login' : '启动登录失败'))
         setIsLoggingIn(false)
@@ -366,8 +369,9 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
             clientId: result.clientId,
             clientSecret: result.clientSecret,
             region: result.region,
+            startUrl: ssoStartUrl.trim(),
             authMethod: 'IdC',
-            provider: 'IAM_SSO'
+            provider: 'Enterprise'
           })
           
           setIsLoggingIn(false)
@@ -1019,7 +1023,7 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
                     <Button 
                       variant="outline" 
                       className="flex-1"
-                      onClick={() => window.api.openExternal(builderIdLoginData.verificationUri)}
+                      onClick={() => window.api.openExternal(builderIdLoginData.verificationUri, usePrivateMode)}
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
                       {isEn ? 'Open Browser' : '重新打开浏览器'}
@@ -1105,13 +1109,13 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
                   <div className="space-y-3 px-2">
                     {/* Google */}
                     <button 
-                      className="group w-full h-14 flex items-center px-4 gap-4 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-all duration-200 hover:shadow-md hover:border-primary/30"
+                      className="group w-full h-14 flex items-center px-4 gap-4 bg-background hover:bg-muted border border-border rounded-xl transition-all duration-200 hover:shadow-md hover:border-primary/30"
                       onClick={() => {
                         setLoginType('google')
                         handleStartSocialLogin('Google')
                       }}
                     >
-                      <div className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm border p-1.5 group-hover:scale-110 transition-transform">
+                      <div className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 rounded-full shadow-sm border dark:border-slate-600 p-1.5 group-hover:scale-110 transition-transform">
                         <svg viewBox="0 0 24 24" className="w-full h-full">
                           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -1127,14 +1131,14 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
 
                     {/* GitHub */}
                     <button 
-                      className="group w-full h-14 flex items-center px-4 gap-4 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-all duration-200 hover:shadow-md hover:border-primary/30"
+                      className="group w-full h-14 flex items-center px-4 gap-4 bg-background hover:bg-muted border border-border rounded-xl transition-all duration-200 hover:shadow-md hover:border-primary/30"
                       onClick={() => {
                         setLoginType('github')
                         handleStartSocialLogin('Github')
                       }}
                     >
-                      <div className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm border p-1.5 group-hover:scale-110 transition-transform">
-                        <svg viewBox="0 0 24 24" fill="#24292f" className="w-full h-full">
+                      <div className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 rounded-full shadow-sm border dark:border-slate-600 p-1.5 group-hover:scale-110 transition-transform">
+                        <svg viewBox="0 0 24 24" fill="#24292f" className="w-full h-full dark:fill-white">
                           <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                         </svg>
                       </div>
@@ -1146,15 +1150,15 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
 
                     {/* AWS Builder ID */}
                     <button 
-                      className="group w-full h-14 flex items-center px-4 gap-4 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-all duration-200 hover:shadow-md hover:border-primary/30"
+                      className="group w-full h-14 flex items-center px-4 gap-4 bg-background hover:bg-muted border border-border rounded-xl transition-all duration-200 hover:shadow-md hover:border-primary/30"
                       onClick={() => {
                         setLoginType('builderid')
                         handleStartBuilderIdLogin()
                       }}
                     >
-                      <div className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm border p-1.5 group-hover:scale-110 transition-transform">
-                        <svg viewBox="0 0 24 24" fill="#232f3e" className="w-full h-full">
-                          <text x="0" y="17" fontSize="12" fontWeight="bold" fontFamily="Arial">aws</text>
+                      <div className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 rounded-full shadow-sm border dark:border-slate-600 p-1.5 group-hover:scale-110 transition-transform">
+                        <svg viewBox="0 0 24 24" className="w-full h-full">
+                          <text x="0" y="17" fontSize="12" fontWeight="bold" fontFamily="Arial" className="fill-[#232f3e] dark:fill-white">aws</text>
                         </svg>
                       </div>
                       <div className="flex flex-col items-start">
@@ -1165,19 +1169,19 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
 
                     {/* IAM Identity Center (Organization) */}
                     <button 
-                      className="group w-full h-14 flex items-center px-4 gap-4 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-all duration-200 hover:shadow-md hover:border-primary/30"
+                      className="group w-full h-14 flex items-center px-4 gap-4 bg-background hover:bg-muted border border-border rounded-xl transition-all duration-200 hover:shadow-md hover:border-primary/30"
                       onClick={() => {
                         setLoginType('iamsso')
                       }}
                     >
-                      <div className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm border p-1.5 group-hover:scale-110 transition-transform">
-                        <svg viewBox="0 0 24 24" fill="#232f3e" className="w-full h-full">
+                      <div className="w-8 h-8 flex items-center justify-center bg-white dark:bg-slate-800 rounded-full shadow-sm border dark:border-slate-600 p-1.5 group-hover:scale-110 transition-transform">
+                        <svg viewBox="0 0 24 24" className="w-full h-full fill-[#232f3e] dark:fill-white">
                           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
                         </svg>
                       </div>
                       <div className="flex flex-col items-start">
-                        <span className="text-sm font-semibold text-foreground">{isEn ? 'Organization Identity' : '组织身份'}</span>
-                        <span className="text-xs text-muted-foreground">{isEn ? 'IAM Identity Center SSO' : 'IAM Identity Center SSO'}</span>
+                        <span className="text-sm font-semibold text-foreground">Enterprise</span>
+                        <span className="text-xs text-muted-foreground">IAM Identity Center SSO</span>
                       </div>
                     </button>
                   </div>
@@ -1438,7 +1442,7 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
                             setProvider('Enterprise')
                           }}
                         >
-                          {isEn ? 'Organization' : '组织身份'}
+                          Enterprise
                         </button>
                         <button
                           type="button"
@@ -1476,7 +1480,7 @@ export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): Re
                       )}
                       {authMethod === 'IdC' && provider === 'Enterprise' && (
                         <p className="text-xs text-muted-foreground">
-                          {isEn ? 'Organization identity (IAM Identity Center SSO)' : '组织身份（IAM Identity Center SSO）'}
+                          Enterprise (IAM Identity Center SSO)
                         </p>
                       )}
                     </div>

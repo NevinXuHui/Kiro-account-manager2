@@ -271,6 +271,14 @@ The project is configured with GitHub Actions workflow for auto building all pla
 
 ## 📋 Changelog
 
+### v1.3.9 (2025-01-19)
+- 🔐 **Enterprise Login Fix**: Fixed IAM Identity Center SSO login using Authorization Code Grant with PKCE flow
+- 🔧 **Enterprise Switch Fix**: Fixed account switching for Enterprise accounts by using correct startUrl to calculate clientIdHash
+- 🚪 **Logout Button**: Active account now shows logout button instead of switch button, clears SSO cache on click
+- 🌙 **Dark Mode Button Fix**: Login method buttons now properly support dark mode with theme-aware background colors
+- 👤 **Account Display Optimization**: Accounts without email now display nickname or userId as fallback
+- 🏷️ **Enterprise Label Update**: Changed "组织身份" to "Enterprise" in login UI for consistency
+
 ### v1.3.8 (2025-01-18)
 - 🏢 **IAM Identity Center SSO Login**: Added organization identity login support via IAM Identity Center SSO
 - 🔗 **SSO Start URL Input**: Users can input their organization's SSO Start URL for authentication

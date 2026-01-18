@@ -1012,9 +1012,13 @@ app.whenReady().then(async () => {
   })
 
   // IPC: 打开外部链接
-  ipcMain.on('open-external', (_event, url: string) => {
+  ipcMain.on('open-external', (_event, url: string, usePrivateMode?: boolean) => {
     if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
-      shell.openExternal(url)
+      if (usePrivateMode) {
+        openBrowserInPrivateMode(url)
+      } else {
+        shell.openExternal(url)
+      }
     }
   })
 
@@ -2316,8 +2320,10 @@ app.whenReady().then(async () => {
     
     try {
       const { refreshToken, clientId, clientSecret, region = 'us-east-1', authMethod, provider } = credentials
-      // 确定 idp：社交登录使用 provider，IdC 使用 BuilderId
-      const idp = authMethod === 'social' && provider ? provider : 'BuilderId'
+      // 确定 idp：社交登录使用 provider，IdC 也需要根据 provider 区分 BuilderId 和 Enterprise
+      const idp = provider && (provider === 'Enterprise' || provider === 'Github' || provider === 'Google') 
+        ? provider 
+        : 'BuilderId'
       
       // 社交登录只需要 refreshToken，IdC 需要 clientId 和 clientSecret
       if (!refreshToken) {
@@ -2650,8 +2656,9 @@ app.whenReady().then(async () => {
     clientId: string
     clientSecret: string
     region?: string
+    startUrl?: string
     authMethod?: 'IdC' | 'social'
-    provider?: 'BuilderId' | 'Github' | 'Google'
+    provider?: 'BuilderId' | 'Github' | 'Google' | 'Enterprise'
   }) => {
     const os = await import('os')
     const path = await import('path')
@@ -2665,14 +2672,16 @@ app.whenReady().then(async () => {
         clientId, 
         clientSecret, 
         region = 'us-east-1',
+        startUrl,
         authMethod = 'IdC',
         provider = 'BuilderId'
       } = credentials
       
       // 计算 clientIdHash (与 Kiro 客户端一致)
-      const startUrl = 'https://view.awsapps.com/start'
+      // Enterprise 账户使用自己的 startUrl，BuilderId 使用默认的
+      const effectiveStartUrl = startUrl || 'https://view.awsapps.com/start'
       const clientIdHash = crypto.createHash('sha1')
-        .update(JSON.stringify({ startUrl }))
+        .update(JSON.stringify({ startUrl: effectiveStartUrl }))
         .digest('hex')
       
       // 确保目录存在
@@ -2720,6 +2729,35 @@ app.whenReady().then(async () => {
     }
   })
 
+  // IPC: 退出登录 - 清除本地 SSO 缓存
+  ipcMain.handle('logout-account', async () => {
+    const os = await import('os')
+    const path = await import('path')
+    const { readdir, unlink, rm } = await import('fs/promises')
+    
+    try {
+      const ssoCache = path.join(os.homedir(), '.aws', 'sso', 'cache')
+      console.log('[Logout] Clearing SSO cache:', ssoCache)
+      
+      // 读取目录下所有文件
+      const files = await readdir(ssoCache).catch(() => [])
+      
+      // 删除所有文件
+      for (const file of files) {
+        const filePath = path.join(ssoCache, file)
+        await unlink(filePath).catch((e) => {
+          console.warn('[Logout] Failed to delete file:', filePath, e)
+        })
+      }
+      
+      console.log('[Logout] SSO cache cleared, deleted', files.length, 'files')
+      return { success: true, deletedCount: files.length }
+    } catch (error) {
+      console.error('[Logout] Error:', error)
+      return { success: false, error: error instanceof Error ? error.message : '退出失败' }
+    }
+  })
+
   // ============ 手动登录相关 IPC ============
 
   // 存储当前登录状态
@@ -2734,6 +2772,8 @@ app.whenReady().then(async () => {
     interval?: number
     expiresAt?: number
     startUrl?: string // IAM SSO 专用
+    redirectUri?: string // IAM SSO Authorization Code flow
+    region?: string // IAM SSO region
     // Social Auth 相关
     codeVerifier?: string
     codeChallenge?: string
@@ -2904,15 +2944,32 @@ app.whenReady().then(async () => {
     return { success: true }
   })
 
-  // IPC: 启动 IAM Identity Center SSO 登录
+  // IAM SSO 本地服务器和状态
+  let iamSsoServer: ReturnType<typeof import('http').createServer> | null = null
+  let iamSsoResult: {
+    completed: boolean
+    success: boolean
+    accessToken?: string
+    refreshToken?: string
+    clientId?: string
+    clientSecret?: string
+    region?: string
+    expiresIn?: number
+    error?: string
+  } | null = null
+
+  // IPC: 启动 IAM Identity Center SSO 登录 (使用 Authorization Code Grant with PKCE)
   ipcMain.handle('start-iam-sso-login', async (_event, startUrl: string, region: string = 'us-east-1') => {
-    console.log('[Login] Starting IAM Identity Center SSO login...')
+    console.log('[Login] Starting IAM Identity Center SSO login (Authorization Code flow)...')
     console.log('[Login] Start URL:', startUrl)
     
     // 验证 startUrl 格式
     if (!startUrl || !startUrl.startsWith('https://')) {
       return { success: false, error: 'SSO Start URL 必须以 https:// 开头' }
     }
+    
+    const crypto = await import('crypto')
+    const http = await import('http')
     
     const oidcBase = `https://oidc.${region}.amazonaws.com`
     const scopes = [
@@ -2924,7 +2981,7 @@ app.whenReady().then(async () => {
     ]
 
     try {
-      // Step 1: 注册 OIDC 客户端
+      // Step 1: 注册 OIDC 客户端 (使用 authorization_code grant type)
       console.log('[Login] Step 1: Registering OIDC client...')
       const regRes = await fetch(`${oidcBase}/client/register`, {
         method: 'POST',
@@ -2933,13 +2990,23 @@ app.whenReady().then(async () => {
           clientName: 'Kiro Account Manager',
           clientType: 'public',
           scopes,
-          grantTypes: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token'],
+          grantTypes: ['authorization_code', 'refresh_token'],
+          redirectUris: ['http://127.0.0.1/oauth/callback'],
           issuerUrl: startUrl
         })
       })
 
       if (!regRes.ok) {
         const errText = await regRes.text()
+        console.error('[Login] IAM SSO client registration failed:', regRes.status, errText)
+        
+        if (errText.includes('UnauthorizedException') || errText.includes('access denied')) {
+          return { 
+            success: false, 
+            error: '授权失败：您的组织可能未配置 Amazon Q Developer 访问权限。请联系组织管理员在 IAM Identity Center 中启用相关权限。' 
+          }
+        }
+        
         return { success: false, error: `注册客户端失败: ${errText}` }
       }
 
@@ -2948,42 +3015,153 @@ app.whenReady().then(async () => {
       const clientSecret = regData.clientSecret
       console.log('[Login] Client registered:', clientId.substring(0, 30) + '...')
 
-      // Step 2: 发起设备授权
-      console.log('[Login] Step 2: Starting device authorization...')
-      const authRes = await fetch(`${oidcBase}/device_authorization`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, clientSecret, startUrl })
-      })
+      // Step 2: 生成 PKCE 和 state
+      const codeVerifier = crypto.randomBytes(32).toString('base64url')
+      const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url')
+      const state = crypto.randomUUID()
 
-      if (!authRes.ok) {
-        const errText = await authRes.text()
-        return { success: false, error: `设备授权失败: ${errText}` }
+      // Step 3: 启动本地 HTTP 服务器接收回调
+      console.log('[Login] Step 2: Starting local OAuth callback server...')
+      
+      // 关闭之前的服务器
+      if (iamSsoServer) {
+        iamSsoServer.close()
+        iamSsoServer = null
       }
 
-      const authData = await authRes.json()
-      const { deviceCode, userCode, verificationUri, verificationUriComplete, interval = 5, expiresIn = 600 } = authData
-      console.log('[Login] Device code obtained, user_code:', userCode)
+      // 找一个可用端口
+      const port = await new Promise<number>((resolve, reject) => {
+        const server = http.createServer()
+        server.listen(0, '127.0.0.1', () => {
+          const addr = server.address()
+          if (addr && typeof addr === 'object') {
+            const p = addr.port
+            server.close(() => resolve(p))
+          } else {
+            reject(new Error('无法获取端口'))
+          }
+        })
+      })
+
+      const redirectUri = `http://127.0.0.1:${port}/oauth/callback`
+      console.log('[Login] Redirect URI:', redirectUri)
+
+      // 重置结果
+      iamSsoResult = null
+
+      // 创建回调服务器
+      iamSsoServer = http.createServer(async (req, res) => {
+        const url = new URL(req.url || '', `http://127.0.0.1:${port}`)
+        
+        if (url.pathname === '/oauth/callback') {
+          const code = url.searchParams.get('code')
+          const returnedState = url.searchParams.get('state')
+          const error = url.searchParams.get('error')
+          
+          if (error) {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+            res.end('<html><body><h1>授权失败</h1><p>您可以关闭此窗口。</p></body></html>')
+            iamSsoResult = { completed: true, success: false, error: `授权失败: ${error}` }
+            return
+          }
+          
+          if (returnedState !== state) {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+            res.end('<html><body><h1>授权失败</h1><p>状态不匹配，请重试。</p></body></html>')
+            iamSsoResult = { completed: true, success: false, error: '状态不匹配' }
+            return
+          }
+          
+          if (code) {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+            res.end('<html><body><h1>授权成功！</h1><p>正在获取令牌，请稍候...</p></body></html>')
+            
+            // 自动完成 token 交换
+            try {
+              const tokenRes = await fetch(`${oidcBase}/token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  clientId,
+                  clientSecret,
+                  grantType: 'authorization_code',
+                  redirectUri,
+                  code,
+                  codeVerifier
+                })
+              })
+
+              if (!tokenRes.ok) {
+                const errText = await tokenRes.text()
+                console.error('[Login] Token exchange failed:', tokenRes.status, errText)
+                iamSsoResult = { completed: true, success: false, error: `获取 Token 失败: ${errText}` }
+              } else {
+                const tokenData = await tokenRes.json()
+                console.log('[Login] IAM SSO Authorization successful!')
+                iamSsoResult = {
+                  completed: true,
+                  success: true,
+                  accessToken: tokenData.accessToken,
+                  refreshToken: tokenData.refreshToken,
+                  clientId,
+                  clientSecret,
+                  region,
+                  expiresIn: tokenData.expiresIn
+                }
+              }
+            } catch (tokenError) {
+              console.error('[Login] Token exchange error:', tokenError)
+              iamSsoResult = { 
+                completed: true, 
+                success: false, 
+                error: tokenError instanceof Error ? tokenError.message : '获取 Token 失败' 
+              }
+            }
+          } else {
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+            res.end('<html><body><h1>授权失败</h1><p>未收到授权码。</p></body></html>')
+            iamSsoResult = { completed: true, success: false, error: '未收到授权码' }
+          }
+        } else {
+          res.writeHead(404)
+          res.end('Not Found')
+        }
+      })
+
+      iamSsoServer.listen(port, '127.0.0.1', () => {
+        console.log('[Login] OAuth callback server listening on port', port)
+      })
+
+      // Step 4: 构建授权 URL 并打开浏览器
+      const authorizeParams = new URLSearchParams({
+        response_type: 'code',
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scopes: scopes.join(','),
+        state: state,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256'
+      })
+      const authorizeUrl = `${oidcBase}/authorize?${authorizeParams.toString()}`
+      console.log('[Login] Opening browser for authorization...')
 
       // 保存登录状态
       currentLoginState = {
         type: 'iamsso',
         clientId,
         clientSecret,
-        deviceCode,
-        userCode,
-        verificationUri,
-        interval,
-        expiresAt: Date.now() + expiresIn * 1000,
-        startUrl // 保存 startUrl 用于后续使用
+        codeVerifier,
+        redirectUri,
+        region,
+        startUrl,
+        expiresAt: Date.now() + 600000
       }
 
+      // 返回授权 URL，前端会打开浏览器
       return {
         success: true,
-        userCode,
-        verificationUri: verificationUriComplete || verificationUri,
-        expiresIn,
-        interval
+        authorizeUrl,
+        expiresIn: 600
       }
     } catch (error) {
       console.error('[Login] Error:', error)
@@ -2991,84 +3169,49 @@ app.whenReady().then(async () => {
     }
   })
 
-  // IPC: 轮询 IAM SSO 授权状态
-  ipcMain.handle('poll-iam-sso-auth', async (_event, region: string = 'us-east-1') => {
-    console.log('[Login] Polling for IAM SSO authorization...')
-
+  // IPC: 轮询 IAM SSO 授权状态 (检查本地服务器是否收到回调)
+  ipcMain.handle('poll-iam-sso-auth', async () => {
     if (!currentLoginState || currentLoginState.type !== 'iamsso') {
       return { success: false, error: '没有进行中的 IAM SSO 登录' }
     }
 
     if (Date.now() > (currentLoginState.expiresAt || 0)) {
+      if (iamSsoServer) {
+        iamSsoServer.close()
+        iamSsoServer = null
+      }
+      iamSsoResult = null
       currentLoginState = null
       return { success: false, error: '授权已过期，请重新开始' }
     }
 
-    const oidcBase = `https://oidc.${region}.amazonaws.com`
-    const { clientId, clientSecret, deviceCode } = currentLoginState
-
-    try {
-      const tokenRes = await fetch(`${oidcBase}/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId,
-          clientSecret,
-          grantType: 'urn:ietf:params:oauth:grant-type:device_code',
-          deviceCode
-        })
-      })
-
-      if (tokenRes.status === 200) {
-        const tokenData = await tokenRes.json()
-        console.log('[Login] IAM SSO Authorization successful!')
-        
-        const result = {
-          success: true,
-          completed: true,
-          accessToken: tokenData.accessToken,
-          refreshToken: tokenData.refreshToken,
-          clientId,
-          clientSecret,
-          region,
-          expiresIn: tokenData.expiresIn
+    // 检查是否已收到回调并完成 token 交换
+    if (iamSsoResult) {
+      const result = { ...iamSsoResult }
+      if (result.completed) {
+        // 清理状态
+        if (iamSsoServer) {
+          iamSsoServer.close()
+          iamSsoServer = null
         }
-        
+        iamSsoResult = null
         currentLoginState = null
-        return result
-      } else if (tokenRes.status === 400) {
-        const errData = await tokenRes.json()
-        const error = errData.error
-
-        if (error === 'authorization_pending') {
-          return { success: true, completed: false, status: 'pending' }
-        } else if (error === 'slow_down') {
-          if (currentLoginState) {
-            currentLoginState.interval = (currentLoginState.interval || 5) + 5
-          }
-          return { success: true, completed: false, status: 'slow_down' }
-        } else if (error === 'expired_token') {
-          currentLoginState = null
-          return { success: false, error: '设备码已过期' }
-        } else if (error === 'access_denied') {
-          currentLoginState = null
-          return { success: false, error: '用户拒绝授权' }
-        } else {
-          currentLoginState = null
-          return { success: false, error: `授权错误: ${error}` }
-        }
-      } else {
-        return { success: false, error: `未知响应: ${tokenRes.status}` }
       }
-    } catch (error) {
-      console.error('[Login] Poll error:', error)
-      return { success: false, error: error instanceof Error ? error.message : '轮询失败' }
+      return result
     }
+
+    // 还在等待回调
+    return { success: true, completed: false, status: 'pending' }
   })
 
   // IPC: 取消 IAM SSO 登录
   ipcMain.handle('cancel-iam-sso-login', async () => {
     console.log('[Login] Cancelling IAM SSO login...')
+    if (iamSsoServer) {
+      iamSsoServer.close()
+      iamSsoServer = null
+    }
+    iamSsoResult = null
     currentLoginState = null
     return { success: true }
   })

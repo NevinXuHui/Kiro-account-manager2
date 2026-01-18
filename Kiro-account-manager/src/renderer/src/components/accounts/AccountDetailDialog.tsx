@@ -28,6 +28,14 @@ interface AccountDetailDialogProps {
   isRefreshing?: boolean
 }
 
+// 获取账户显示名称：昵称优先，无则邮箱，无邮箱则 userId
+function getDisplayName(account: Account): string {
+  if (account.nickname) return account.nickname
+  if (account.email) return account.email
+  if (account.userId) return account.userId
+  return 'Unknown'
+}
+
 // 格式化日期
 const formatDate = (date: unknown): string => {
   if (!date) return '-'
@@ -119,7 +127,7 @@ export function AccountDetailDialog({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-lg">{maskEmail(account.email)}</span>
+                <span className="font-bold text-lg">{account.email ? maskEmail(account.email) : getDisplayName(account)}</span>
                 <Badge className="bg-primary hover:bg-primary/90 text-white shadow-sm">
                   {subscription.title || subscription.type}
                 </Badge>
@@ -262,8 +270,8 @@ export function AccountDetailDialog({
                </h3>
                <div className="bg-muted/30 border rounded-xl p-4 space-y-4">
                  <div className="space-y-1">
-                   <label className="text-xs font-medium text-muted-foreground">{isEn ? 'Email' : '邮箱地址'}</label>
-                   <div className="text-sm font-mono break-all select-all">{maskEmail(account.email)}</div>
+                   <label className="text-xs font-medium text-muted-foreground">{isEn ? 'Email/ID' : '邮箱/ID'}</label>
+                   <div className="text-sm font-mono break-all select-all">{account.email ? maskEmail(account.email) : getDisplayName(account)}</div>
                  </div>
                  <div className="grid grid-cols-2 gap-4">
                    <div className="space-y-1">

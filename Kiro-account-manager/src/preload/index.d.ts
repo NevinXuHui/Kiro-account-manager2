@@ -114,7 +114,7 @@ interface StatusResult {
 }
 
 interface KiroApi {
-  openExternal: (url: string) => void
+  openExternal: (url: string, usePrivateMode?: boolean) => void
   getAppVersion: () => Promise<string>
   onAuthCallback: (callback: (data: { code: string; state: string }) => void) => () => void
 
@@ -167,9 +167,13 @@ interface KiroApi {
     clientId: string
     clientSecret: string
     region?: string
+    startUrl?: string
     authMethod?: 'IdC' | 'social'
     provider?: 'BuilderId' | 'Enterprise' | 'Github' | 'Google' | 'IAM_SSO'
   }) => Promise<{ success: boolean; error?: string }>
+
+  // 退出登录 - 清除本地 SSO 缓存
+  logoutAccount: () => Promise<{ success: boolean; deletedCount?: number; error?: string }>
 
   // 文件操作
   exportToFile: (data: string, filename: string) => Promise<boolean>
@@ -329,13 +333,11 @@ interface KiroApi {
   // 取消 Builder ID 登录
   cancelBuilderIdLogin: () => Promise<{ success: boolean }>
 
-  // 启动 IAM Identity Center SSO 登录
+  // 启动 IAM Identity Center SSO 登录 (Authorization Code flow)
   startIamSsoLogin: (startUrl: string, region?: string) => Promise<{
     success: boolean
-    userCode?: string
-    verificationUri?: string
+    authorizeUrl?: string
     expiresIn?: number
-    interval?: number
     error?: string
   }>
 

@@ -22,7 +22,8 @@ import {
   X,
   ExternalLink,
   CreditCard,
-  Sparkles
+  Sparkles,
+  LogOut
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -106,6 +107,14 @@ const StatusLabelsEn: Record<string, string> = {
   unknown: 'Unknown'
 }
 
+// 获取账户显示名称：昵称优先，无则邮箱，无邮箱则 userId
+function getDisplayName(account: Account): string {
+  if (account.nickname) return account.nickname
+  if (account.email) return account.email
+  if (account.userId) return account.userId
+  return 'Unknown'
+}
+
 // 格式化 Token 到期时间
 function formatTokenExpiry(expiresAt: number, isEn: boolean): string {
   const now = Date.now()
@@ -183,6 +192,7 @@ export const AccountCard = memo(function AccountCard({
       clientId: credentials.clientId || '',
       clientSecret: credentials.clientSecret || '',
       region: credentials.region || 'us-east-1',
+      startUrl: credentials.startUrl,
       authMethod: credentials.authMethod,
       provider: credentials.provider
     })
@@ -199,6 +209,21 @@ export const AccountCard = memo(function AccountCard({
     await checkAccountStatus(account.id)
   }
 
+  const handleLogout = async (): Promise<void> => {
+    if (!confirm(isEn ? 'This will clear local SSO cache and logout from Kiro. Continue?' : '这将清除本地 SSO 缓存并退出 Kiro 登录，是否继续？')) {
+      return
+    }
+    
+    const result = await window.api.logoutAccount()
+    if (result.success) {
+      // 取消当前账号的激活状态
+      setActiveAccount(null)
+      alert(isEn ? `Logged out successfully, cleared ${result.deletedCount} cache files` : `退出成功，已清除 ${result.deletedCount} 个缓存文件`)
+    } else {
+      alert(isEn ? `Logout failed: ${result.error}` : `退出失败: ${result.error}`)
+    }
+  }
+
   const [isRefreshingToken, setIsRefreshingToken] = useState(false)
   const handleRefreshToken = async (): Promise<void> => {
     setIsRefreshingToken(true)
@@ -210,7 +235,7 @@ export const AccountCard = memo(function AccountCard({
   }
 
   const handleDelete = (): void => {
-    if (confirm(isEn ? `Delete account ${maskEmail(account.email)}?` : `确定要删除账号 ${maskEmail(account.email)} 吗？`)) {
+    if (confirm(isEn ? `Delete account ${getDisplayName(account)}?` : `确定要删除账号 ${getDisplayName(account)} 吗？`)) {
       removeAccount(account.id)
     }
   }
@@ -429,7 +454,7 @@ export const AccountCard = memo(function AccountCard({
 
            <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                 <h3 className="font-semibold text-sm truncate text-foreground/90" title={maskEmail(account.email)}>{maskEmail(account.email)}</h3>
+                 <h3 className="font-semibold text-sm truncate text-foreground/90" title={getDisplayName(account)}>{account.email ? maskEmail(account.email) : getDisplayName(account)}</h3>
                  {/* Status Badge */}
                  <div className={cn(
                     "text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0",
@@ -602,7 +627,17 @@ export const AccountCard = memo(function AccountCard({
 
             {/* Right: Actions */}
             <div className="flex items-center gap-0.5">
-               {!account.isActive && (
+               {account.isActive ? (
+                 <Button
+                   size="icon"
+                   variant="ghost"
+                   className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                   onClick={(e) => { e.stopPropagation(); handleLogout() }}
+                   title={isEn ? 'Logout (clear SSO cache)' : '退出登录（清除 SSO 缓存）'}
+                 >
+                   <LogOut className="h-3.5 w-3.5" />
+                 </Button>
+               ) : (
                  <Button
                    size="icon"
                    variant="ghost"
@@ -665,7 +700,7 @@ export const AccountCard = memo(function AccountCard({
             <div className="p-4 space-y-4">
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">{isEn ? 'Account' : '账户'}</label>
-                <div className="text-sm font-medium">{account.email}</div>
+                <div className="text-sm font-medium">{getDisplayName(account)}</div>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">{isEn ? 'Error Details' : '错误详情'}</label>
