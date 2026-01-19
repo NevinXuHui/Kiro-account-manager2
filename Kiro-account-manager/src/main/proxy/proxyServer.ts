@@ -24,11 +24,12 @@ import {
 
 export interface ProxyServerEvents {
   onRequest?: (info: { path: string; method: string; accountId?: string }) => void
-  onResponse?: (info: { path: string; status: number; tokens?: number; error?: string }) => void
+  onResponse?: (info: { path: string; status: number; tokens?: number; credits?: number; error?: string }) => void
   onError?: (error: Error) => void
   onStatusChange?: (running: boolean, port: number) => void
   onTokenRefresh?: TokenRefreshCallback
   onAccountUpdate?: (account: ProxyAccount) => void
+  onCreditsUpdate?: (totalCredits: number) => void
 }
 
 export class ProxyServer {
@@ -61,6 +62,7 @@ export class ProxyServer {
       successRequests: 0,
       failedRequests: 0,
       totalTokens: 0,
+      totalCredits: 0,
       inputTokens: 0,
       outputTokens: 0,
       startTime: Date.now(),
@@ -184,12 +186,37 @@ export class ProxyServer {
 
   // 获取统计信息
   getStats(): ProxyStats {
-    return { ...this.stats }
+    // 返回可序列化的统计信息（Map 对象在 IPC 中无法正确序列化）
+    return {
+      totalRequests: this.stats.totalRequests,
+      successRequests: this.stats.successRequests,
+      failedRequests: this.stats.failedRequests,
+      totalTokens: this.stats.totalTokens,
+      totalCredits: this.stats.totalCredits,
+      inputTokens: this.stats.inputTokens,
+      outputTokens: this.stats.outputTokens,
+      startTime: this.stats.startTime,
+      accountStats: this.stats.accountStats,
+      endpointStats: this.stats.endpointStats,
+      modelStats: this.stats.modelStats,
+      recentRequests: this.stats.recentRequests
+    }
   }
 
   // 获取账号池
   getAccountPool(): AccountPool {
     return this.accountPool
+  }
+
+  // 设置初始累计 credits（用于从持久化存储恢复）
+  setTotalCredits(credits: number): void {
+    this.stats.totalCredits = credits
+  }
+
+  // 重置累计 credits
+  resetTotalCredits(): void {
+    this.stats.totalCredits = 0
+    this.events.onCreditsUpdate?.(0)
   }
 
   // 是否运行中
@@ -756,8 +783,13 @@ export class ProxyServer {
     const startTime = Date.now()
 
     try {
+      // 如果启用了禁用工具调用，移除 tools 参数
+      const processedRequest = this.config.disableTools
+        ? { ...request, tools: undefined, tool_choice: undefined }
+        : request
+
       // 转换为 Kiro 格式
-      const kiroPayload = openaiToKiro(request, account.profileArn)
+      const kiroPayload = openaiToKiro(processedRequest, account.profileArn)
 
       if (request.stream) {
         // 流式响应（流式不使用重试机制，错误由流处理）
@@ -766,7 +798,7 @@ export class ProxyServer {
         // 非流式响应（带重试机制）
         const { result, account: usedAccount } = await this.callWithRetry(
           account,
-          async (acc) => callKiroApi(acc, openaiToKiro(request, acc.profileArn)),
+          async (acc) => callKiroApi(acc, openaiToKiro(processedRequest, acc.profileArn)),
           '/v1/chat/completions'
         )
         const response = kiroToOpenaiResponse(result.content, result.toolUses, result.usage, request.model)
@@ -791,21 +823,29 @@ export class ProxyServer {
     account: { id: string; accessToken: string; profileArn?: string },
     kiroPayload: ReturnType<typeof openaiToKiro>,
     model: string,
-    startTime: number
+    startTime: number,
+    currentRound: number = 0,
+    streamId?: string,
+    headersSent: boolean = false
   ): Promise<void> {
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive'
-    })
+    if (!headersSent) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      })
+    }
 
-    const streamId = `chatcmpl-${uuidv4()}`
+    const id = streamId || `chatcmpl-${uuidv4()}`
     let toolCallIndex = 0
     const pendingToolCalls: Map<string, { index: number; name: string; arguments: string }> = new Map()
+    let collectedContent = ''
 
-    // 发送初始 chunk
-    const initialChunk = createOpenaiStreamChunk(streamId, model, { role: 'assistant' })
-    res.write(`data: ${JSON.stringify(initialChunk)}\n\n`)
+    // 发送初始 chunk（仅首轮）
+    if (currentRound === 0) {
+      const initialChunk = createOpenaiStreamChunk(id, model, { role: 'assistant' })
+      res.write(`data: ${JSON.stringify(initialChunk)}\n\n`)
+    }
 
     return new Promise((resolve) => {
       callKiroApiStream(
@@ -813,7 +853,8 @@ export class ProxyServer {
         kiroPayload,
         (text, toolUse) => {
           if (text) {
-            const chunk = createOpenaiStreamChunk(streamId, model, { content: text })
+            collectedContent += text
+            const chunk = createOpenaiStreamChunk(id, model, { content: text })
             res.write(`data: ${JSON.stringify(chunk)}\n\n`)
           }
           if (toolUse) {
@@ -824,7 +865,7 @@ export class ProxyServer {
               arguments: JSON.stringify(toolUse.input)
             })
             // 发送 tool_call chunk
-            const toolChunk = createOpenaiStreamChunk(streamId, model, {
+            const toolChunk = createOpenaiStreamChunk(id, model, {
               tool_calls: [{
                 index: idx,
                 id: toolUse.toolUseId,
@@ -838,20 +879,91 @@ export class ProxyServer {
             res.write(`data: ${JSON.stringify(toolChunk)}\n\n`)
           }
         },
-        (usage) => {
-          // 发送结束 chunk
-          const finishReason = pendingToolCalls.size > 0 ? 'tool_calls' : 'stop'
-          const finalChunk = createOpenaiStreamChunk(streamId, model, {}, finishReason)
-          res.write(`data: ${JSON.stringify(finalChunk)}\n\n`)
-          res.write('data: [DONE]\n\n')
-          res.end()
-
+        async (usage) => {
           this.stats.successRequests++
           this.stats.totalTokens += usage.inputTokens + usage.outputTokens
+          this.stats.totalCredits += usage.credits || 0
+          this.events.onCreditsUpdate?.(this.stats.totalCredits)
           this.accountPool.recordSuccess(account.id, usage.inputTokens + usage.outputTokens)
-          this.events.onResponse?.({ path: '/v1/chat/completions', status: 200, tokens: usage.inputTokens + usage.outputTokens })
-          this.recordRequest({ path: '/v1/chat/completions', model, accountId: account.id, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, responseTime: Date.now() - startTime, success: true })
-          resolve()
+          this.events.onResponse?.({ path: '/v1/chat/completions', status: 200, tokens: usage.inputTokens + usage.outputTokens, credits: usage.credits })
+          this.recordRequest({ path: '/v1/chat/completions', model, accountId: account.id, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, credits: usage.credits, responseTime: Date.now() - startTime, success: true })
+
+          // 检查是否需要自动继续
+          const maxRounds = this.config.autoContinueRounds || 0
+          const hasToolCalls = pendingToolCalls.size > 0
+          const shouldContinue = hasToolCalls && maxRounds > 0 && currentRound < maxRounds
+
+          if (shouldContinue) {
+            console.log(`[ProxyServer] Auto-continue round ${currentRound + 1}/${maxRounds}`)
+            
+            // 构造继续请求：添加 assistant 响应、工具结果和继续消息
+            const toolResults = Array.from(pendingToolCalls.entries()).map(([toolId]) => ({
+              toolUseId: toolId,
+              content: [{ text: 'Done. Continue with the next step.' }]
+            }))
+
+            // 获取原始消息的 modelId 和 origin
+            const originalMsg = kiroPayload.conversationState?.currentMessage?.userInputMessage
+            const modelId = originalMsg?.modelId || 'anthropic.claude-sonnet-4-20250514-v1:0'
+            const origin = originalMsg?.origin || 'CHAT'
+
+            // 构造新的 Kiro payload
+            const continuePayload = {
+              ...kiroPayload,
+              conversationState: {
+                ...kiroPayload.conversationState,
+                currentMessage: {
+                  userInputMessage: {
+                    content: 'Continue.',
+                    userInputMessageContext: {},
+                    modelId,
+                    origin
+                  }
+                },
+                history: [
+                  ...(kiroPayload.conversationState?.history || []),
+                  // 添加 assistant 响应
+                  {
+                    assistantResponseMessage: {
+                      content: collectedContent || 'I will continue with the task.',
+                      ...(pendingToolCalls.size > 0 ? {
+                        toolUses: Array.from(pendingToolCalls.entries()).map(([toolId, toolData]) => ({
+                          toolUseId: toolId,
+                          name: toolData.name,
+                          input: JSON.parse(toolData.arguments)
+                        }))
+                      } : {})
+                    }
+                  },
+                  // 添加工具结果
+                  ...(toolResults.length > 0 ? [{
+                    userInputMessage: {
+                      content: '',
+                      userInputMessageContext: {
+                        toolResults
+                      }
+                    }
+                  }] : [])
+                ]
+              }
+            } as typeof kiroPayload
+
+            // 递归调用继续流式输出
+            try {
+              await this.handleOpenAIStream(res, account, continuePayload, model, startTime, currentRound + 1, id, true)
+            } catch (error) {
+              console.error('[ProxyServer] Auto-continue error:', error)
+            }
+            resolve()
+          } else {
+            // 发送结束 chunk
+            const finishReason = hasToolCalls ? 'tool_calls' : 'stop'
+            const finalChunk = createOpenaiStreamChunk(id, model, {}, finishReason)
+            res.write(`data: ${JSON.stringify(finalChunk)}\n\n`)
+            res.write('data: [DONE]\n\n')
+            res.end()
+            resolve()
+          }
         },
         (error) => {
           console.error('[ProxyServer] Stream error:', error)
@@ -1020,9 +1132,11 @@ export class ProxyServer {
 
           this.stats.successRequests++
           this.stats.totalTokens += usage.inputTokens + usage.outputTokens
+          this.stats.totalCredits += usage.credits || 0
+          this.events.onCreditsUpdate?.(this.stats.totalCredits)
           this.accountPool.recordSuccess(account.id, usage.inputTokens + usage.outputTokens)
-          this.events.onResponse?.({ path: '/v1/messages', status: 200, tokens: usage.inputTokens + usage.outputTokens })
-          this.recordRequest({ path: '/v1/messages', model, accountId: account.id, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, responseTime: Date.now() - startTime, success: true })
+          this.events.onResponse?.({ path: '/v1/messages', status: 200, tokens: usage.inputTokens + usage.outputTokens, credits: usage.credits })
+          this.recordRequest({ path: '/v1/messages', model, accountId: account.id, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, credits: usage.credits, responseTime: Date.now() - startTime, success: true })
           resolve()
         },
         (error) => {
@@ -1084,6 +1198,7 @@ export class ProxyServer {
     accountId?: string
     inputTokens?: number
     outputTokens?: number
+    credits?: number
     responseTime?: number
     success: boolean
     error?: string
@@ -1095,6 +1210,7 @@ export class ProxyServer {
       accountId: log.accountId || 'unknown',
       inputTokens: log.inputTokens || 0,
       outputTokens: log.outputTokens || 0,
+      credits: log.credits,
       responseTime: log.responseTime || 0,
       success: log.success,
       error: log.error

@@ -271,6 +271,14 @@ The project is configured with GitHub Actions workflow for auto building all pla
 
 ## 📋 Changelog
 
+### v1.4.1 (2025-01-19)
+- 💰 **Credits Display**: Replaced Tokens with Credits usage display
+- 📊 **Total Credits Stats**: Added cumulative Credits statistics with persistence
+- 🔄 **Reset Credits**: Added button to reset total Credits count
+- 🔍 **Error Details Popup**: Click error badge in request logs to view error details
+- 🔁 **Auto Continue Rounds**: Auto-send "Continue" after tool calls to prevent stream interruption
+- 🚫 **Disable Tool Calls**: New toggle to remove tools parameter, AI responds directly without tools
+
 ### v1.4.0 (2025-01-19)
 - 🔧 **API 400 Error Fix**: Fixed Kiro API not supporting toolResults and history fields, now embedded as text
 - 🔄 **Multi-Account Toggle Fix**: Fixed issue where accounts still switched when multi-account polling was disabled

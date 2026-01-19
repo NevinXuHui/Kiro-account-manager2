@@ -261,6 +261,10 @@ export interface ProxyConfig {
   tls?: TlsConfig
   // 自动启动
   autoStart?: boolean
+  // 工具调用后自动继续（最大轮数）
+  autoContinueRounds?: number
+  // 禁用工具调用（移除 tools 参数）
+  disableTools?: boolean
 }
 
 export interface TlsConfig {
@@ -286,6 +290,7 @@ export interface ProxyStats {
   successRequests: number
   failedRequests: number
   totalTokens: number
+  totalCredits: number // 累计总 credits（所有请求）
   inputTokens: number
   outputTokens: number
   startTime: number
@@ -330,6 +335,7 @@ export interface RequestLog {
   accountId: string
   inputTokens: number
   outputTokens: number
+  credits?: number // Kiro API 返回的 credit 使用量
   responseTime: number
   success: boolean
   error?: string

@@ -578,8 +578,13 @@ const api = {
     return ipcRenderer.invoke('proxy-get-status')
   },
 
+  // 重置累计 credits
+  proxyResetCredits: (): Promise<{ success: boolean }> => {
+    return ipcRenderer.invoke('proxy-reset-credits')
+  },
+
   // 更新反代服务器配置
-  proxyUpdateConfig: (config: { port?: number; host?: string; apiKey?: string; enableMultiAccount?: boolean; selectedAccountIds?: string[]; logRequests?: boolean; autoStart?: boolean; maxRetries?: number; preferredEndpoint?: 'codewhisperer' | 'amazonq' }): Promise<{ success: boolean; config?: unknown; error?: string }> => {
+  proxyUpdateConfig: (config: { port?: number; host?: string; apiKey?: string; enableMultiAccount?: boolean; selectedAccountIds?: string[]; logRequests?: boolean; autoStart?: boolean; maxRetries?: number; preferredEndpoint?: 'codewhisperer' | 'amazonq'; autoContinueRounds?: number; disableTools?: boolean }): Promise<{ success: boolean; config?: unknown; error?: string }> => {
     return ipcRenderer.invoke('proxy-update-config', config)
   },
 
@@ -660,8 +665,8 @@ const api = {
   },
 
   // 监听反代响应事件
-  onProxyResponse: (callback: (info: { path: string; status: number; tokens?: number; error?: string }) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, info: { path: string; status: number; tokens?: number; error?: string }): void => {
+  onProxyResponse: (callback: (info: { path: string; status: number; tokens?: number; credits?: number; error?: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, info: { path: string; status: number; tokens?: number; credits?: number; error?: string }): void => {
       callback(info)
     }
     ipcRenderer.on('proxy-response', handler)

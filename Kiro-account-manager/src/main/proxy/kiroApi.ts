@@ -293,7 +293,7 @@ export async function callKiroApiStream(
   account: ProxyAccount,
   payload: KiroPayload,
   onChunk: (text: string, toolUse?: KiroToolUse) => void,
-  onComplete: (usage: { inputTokens: number; outputTokens: number }) => void,
+  onComplete: (usage: { inputTokens: number; outputTokens: number; credits: number }) => void,
   onError: (error: Error) => void,
   signal?: AbortSignal,
   preferredEndpoint?: 'codewhisperer' | 'amazonq'
@@ -411,12 +411,12 @@ interface ToolUseState {
 async function parseEventStream(
   body: ReadableStream<Uint8Array>,
   onChunk: (text: string, toolUse?: KiroToolUse) => void,
-  onComplete: (usage: { inputTokens: number; outputTokens: number }) => void,
+  onComplete: (usage: { inputTokens: number; outputTokens: number; credits: number }) => void,
   onError: (error: Error) => void
 ): Promise<void> {
   const reader = body.getReader()
   let buffer = new Uint8Array(0)
-  let usage = { inputTokens: 0, outputTokens: 0 }
+  let usage = { inputTokens: 0, outputTokens: 0, credits: 0 }
   
   // Tool use 状态跟踪 - 用于累积输入片段
   let currentToolUse: ToolUseState | null = null
@@ -588,16 +588,24 @@ async function parseEventStream(
               if (metadata.outputTokens) usage.outputTokens = metadata.outputTokens
             }
             
-            // 调试：打印所有事件类型
-            if (eventType && !['contentBlockDelta', 'contentBlockStart', 'contentBlockStop', 'messageStart', 'messageStop', 'assistantResponseEvent'].includes(eventType)) {
-              console.log('[Kiro] Event:', eventType, JSON.stringify(event))
-            }
+            // 调试：打印所有事件类型（包括常见类型）
+            console.log('[Kiro] Event:', eventType || 'unknown', JSON.stringify(event).slice(0, 500))
             
             // 处理 usageEvent
             if (eventType === 'usageEvent' || eventType === 'usage' || event.usageEvent || event.usage) {
               const usageData = event.usageEvent || event.usage || event
               if (usageData.inputTokens) usage.inputTokens = usageData.inputTokens
               if (usageData.outputTokens) usage.outputTokens = usageData.outputTokens
+            }
+            
+            // 处理 meteringEvent - Kiro API 返回 credit 使用量
+            if (eventType === 'meteringEvent' || event.meteringEvent) {
+              const metering = event.meteringEvent || event
+              if (metering.usage && typeof metering.usage === 'number') {
+                // 累加 credit 使用量
+                usage.credits += metering.usage
+                console.log('[Kiro] meteringEvent - credit:', metering.usage, 'total credits:', usage.credits)
+              }
             }
             
             // 检查 supplementaryWebLinksEvent 中的 usage
@@ -659,12 +667,12 @@ export async function callKiroApi(
 ): Promise<{
   content: string
   toolUses: KiroToolUse[]
-  usage: { inputTokens: number; outputTokens: number }
+  usage: { inputTokens: number; outputTokens: number; credits: number }
 }> {
   return new Promise((resolve, reject) => {
     let content = ''
     const toolUses: KiroToolUse[] = []
-    let usage = { inputTokens: 0, outputTokens: 0 }
+    let usage = { inputTokens: 0, outputTokens: 0, credits: 0 }
 
     callKiroApiStream(
       account,

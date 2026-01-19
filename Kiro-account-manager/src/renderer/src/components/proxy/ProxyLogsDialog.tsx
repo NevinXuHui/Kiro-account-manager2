@@ -1,4 +1,5 @@
-import { X, Trash2, Download } from 'lucide-react'
+import { useState } from 'react'
+import { X, Trash2, Download, AlertCircle, RotateCcw } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitle, Badge } from '../ui'
 
 interface LogEntry {
@@ -6,13 +7,17 @@ interface LogEntry {
   path: string
   status: number
   tokens?: number
+  credits?: number
+  error?: string
 }
 
 interface ProxyLogsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   logs: LogEntry[]
+  totalCredits: number // 累计总 credits（所有请求）
   onClearLogs: () => void
+  onResetCredits?: () => void
   isEn: boolean
 }
 
@@ -20,14 +25,18 @@ export function ProxyLogsDialog({
   open,
   onOpenChange,
   logs,
+  totalCredits,
   onClearLogs,
+  onResetCredits,
   isEn
 }: ProxyLogsDialogProps) {
+  const [expandedError, setExpandedError] = useState<number | null>(null)
+  
   if (!open) return null
 
   const handleExport = () => {
     const content = logs.map(log => 
-      `${log.time}\t${log.path}\t${log.status}${log.tokens ? `\t${log.tokens} tokens` : ''}`
+      `${log.time}\t${log.path}\t${log.status}${log.credits ? `\t${log.credits.toFixed(6)} credits` : ''}`
     ).join('\n')
     const blob = new Blob([content], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
@@ -40,7 +49,7 @@ export function ProxyLogsDialog({
 
   const successCount = logs.filter(l => l.status < 400).length
   const errorCount = logs.filter(l => l.status >= 400).length
-  const totalTokens = logs.reduce((sum, l) => sum + (l.tokens || 0), 0)
+  const recentCredits = logs.reduce((sum, l) => sum + (l.credits || 0), 0)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -67,7 +76,15 @@ export function ProxyLogsDialog({
             <span>{isEn ? 'Total' : '总计'}: <Badge variant="secondary">{logs.length}</Badge></span>
             <span>{isEn ? 'Success' : '成功'}: <Badge className="bg-green-500/20 text-green-600">{successCount}</Badge></span>
             <span>{isEn ? 'Error' : '错误'}: <Badge className="bg-red-500/20 text-red-600">{errorCount}</Badge></span>
-            <span>{isEn ? 'Tokens' : 'Token'}: <Badge variant="outline">{totalTokens.toLocaleString()}</Badge></span>
+            <span>{isEn ? 'Recent' : '最近'}: <Badge variant="outline">{recentCredits.toFixed(4)}</Badge></span>
+            <span className="flex items-center gap-1">
+              {isEn ? 'Total' : '总计'}: <Badge variant="secondary">{totalCredits.toFixed(4)}</Badge>
+              {onResetCredits && (
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onResetCredits} title={isEn ? 'Reset total credits' : '重置总计'}>
+                  <RotateCcw className="h-3 w-3" />
+                </Button>
+              )}
+            </span>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -83,7 +100,7 @@ export function ProxyLogsDialog({
                     <th className="text-left p-2 font-medium">{isEn ? 'Time' : '时间'}</th>
                     <th className="text-left p-2 font-medium">{isEn ? 'Path' : '路径'}</th>
                     <th className="text-center p-2 font-medium">{isEn ? 'Status' : '状态'}</th>
-                    <th className="text-right p-2 font-medium">Tokens</th>
+                    <th className="text-right p-2 font-medium">Credits</th>
                   </tr>
                 </thead>
                 <tbody className="font-mono">
@@ -91,12 +108,36 @@ export function ProxyLogsDialog({
                     <tr key={idx} className="border-b border-muted/30 hover:bg-muted/30">
                       <td className="p-2 text-muted-foreground whitespace-nowrap">{log.time}</td>
                       <td className="p-2 truncate max-w-[300px]" title={log.path}>{log.path}</td>
-                      <td className="p-2 text-center">
-                        <Badge className={log.status >= 400 ? 'bg-red-500/20 text-red-600' : 'bg-green-500/20 text-green-600'}>
-                          {log.status}
-                        </Badge>
+                      <td className="p-2 text-center relative">
+                        {log.status >= 400 && log.error ? (
+                          <div className="relative inline-block">
+                            <Badge 
+                              className="bg-red-500/20 text-red-600 cursor-pointer hover:bg-red-500/30 transition-colors"
+                              onClick={() => setExpandedError(expandedError === idx ? null : idx)}
+                            >
+                              <AlertCircle className="h-3 w-3 mr-1" />
+                              {log.status}
+                            </Badge>
+                            {expandedError === idx && (
+                              <div className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 w-80 bg-background border border-red-500/30 rounded-lg shadow-xl p-3 text-left">
+                                <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 bg-background border-l border-t border-red-500/30 rotate-45"></div>
+                                <div className="text-xs font-sans">
+                                  <div className="font-medium text-red-600 mb-2 flex items-center gap-1">
+                                    <AlertCircle className="h-3 w-3" />
+                                    {isEn ? 'Error Details' : '错误详情'}
+                                  </div>
+                                  <pre className="whitespace-pre-wrap break-all bg-red-500/10 p-2 rounded text-red-700 text-xs max-h-40 overflow-y-auto">{log.error}</pre>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <Badge className={log.status >= 400 ? 'bg-red-500/20 text-red-600' : 'bg-green-500/20 text-green-600'}>
+                            {log.status}
+                          </Badge>
+                        )}
                       </td>
-                      <td className="p-2 text-right text-muted-foreground">{log.tokens?.toLocaleString() || '-'}</td>
+                      <td className="p-2 text-right text-muted-foreground">{log.credits ? log.credits.toFixed(6) : '-'}</td>
                     </tr>
                   ))}
                 </tbody>

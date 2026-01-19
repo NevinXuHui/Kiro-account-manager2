@@ -12,6 +12,7 @@ interface ProxyStats {
   successRequests: number
   failedRequests: number
   totalTokens: number
+  totalCredits: number
   startTime: number
 }
 
@@ -26,6 +27,8 @@ interface ProxyConfig {
   maxRetries?: number
   preferredEndpoint?: 'codewhisperer' | 'amazonq'
   autoStart?: boolean
+  autoContinueRounds?: number
+  disableTools?: boolean
 }
 
 export function ProxyPanel() {
@@ -44,7 +47,7 @@ export function ProxyPanel() {
   const [availableCount, setAvailableCount] = useState(0)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [recentLogs, setRecentLogs] = useState<Array<{ time: string; path: string; status: number; tokens?: number }>>([])
+  const [recentLogs, setRecentLogs] = useState<Array<{ time: string; path: string; status: number; tokens?: number; credits?: number; error?: string }>>([])
   const [isSyncing, setIsSyncing] = useState(false)
   const [isRefreshingModels, setIsRefreshingModels] = useState(false)
   const [syncSuccess, setSyncSuccess] = useState(false)
@@ -258,7 +261,9 @@ export function ProxyPanel() {
         time: new Date().toLocaleTimeString(),
         path: info.path,
         status: info.status,
-        tokens: info.tokens
+        tokens: info.tokens,
+        credits: info.credits,
+        error: info.error
       }, ...prev.slice(0, 99)]) // 保留最多 100 条
 
       // 更新统计
@@ -597,6 +602,38 @@ export function ProxyPanel() {
                   disabled={isRunning}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="autoContinueRounds">{isEn ? 'Auto Continue Rounds' : '自动继续轮数'}</Label>
+                <Input
+                  id="autoContinueRounds"
+                  type="number"
+                  min={0}
+                  max={20}
+                  value={config.autoContinueRounds || 0}
+                  onChange={(e) => {
+                    const rounds = parseInt(e.target.value) || 0
+                    setConfig(prev => ({ ...prev, autoContinueRounds: rounds }))
+                    window.api.proxyUpdateConfig({ autoContinueRounds: rounds })
+                  }}
+                  disabled={isRunning}
+                />
+                <p className="text-xs text-muted-foreground">{isEn ? '0 = disabled. Auto-send "Continue" after tool calls.' : '0 = 禁用。工具调用后自动发送"继续"。'}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="disableTools">{isEn ? 'Disable Tool Calls' : '禁用工具调用'}</Label>
+                <div className="flex items-center justify-between h-9 px-3 rounded-md border border-input bg-transparent">
+                  <span className="text-sm text-muted-foreground">{isEn ? 'AI will not call any tools' : 'AI 不会调用任何工具'}</span>
+                  <Switch
+                    id="disableTools"
+                    checked={config.disableTools || false}
+                    onCheckedChange={(checked) => {
+                      setConfig(prev => ({ ...prev, disableTools: checked }))
+                      window.api.proxyUpdateConfig({ disableTools: checked })
+                    }}
+                    disabled={isRunning}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -657,43 +694,43 @@ export function ProxyPanel() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <div className="flex justify-between">
+          <div className="grid grid-cols-2 gap-2">
             <code className="text-muted-foreground">POST /v1/chat/completions</code>
-            <span>{isEn ? 'OpenAI Compatible' : 'OpenAI 兼容'}</span>
+            <span className="text-right">{isEn ? 'OpenAI Compatible' : 'OpenAI 兼容'}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="grid grid-cols-2 gap-2">
             <code className="text-muted-foreground">POST /v1/messages</code>
-            <span>{isEn ? 'Claude Compatible' : 'Claude 兼容'}</span>
+            <span className="text-right">{isEn ? 'Claude Compatible' : 'Claude 兼容'}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="grid grid-cols-2 gap-2">
             <code className="text-muted-foreground">POST /anthropic/v1/messages</code>
-            <span>{isEn ? 'Claude Code Compatible' : 'Claude Code 兼容'}</span>
+            <span className="text-right">{isEn ? 'Claude Code Compatible' : 'Claude Code 兼容'}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="grid grid-cols-2 gap-2">
             <code className="text-muted-foreground">POST /v1/messages/count_tokens</code>
-            <span>{isEn ? 'Token Count' : 'Token 计数'}</span>
+            <span className="text-right">{isEn ? 'Token Count' : 'Token 计数'}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="grid grid-cols-2 gap-2">
             <code className="text-muted-foreground">GET /v1/models</code>
-            <span>{isEn ? 'Model List' : '模型列表'}</span>
+            <span className="text-right">{isEn ? 'Model List' : '模型列表'}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="grid grid-cols-2 gap-2">
             <code className="text-muted-foreground">GET /health</code>
-            <span>{isEn ? 'Health Check' : '健康检查'}</span>
+            <span className="text-right">{isEn ? 'Health Check' : '健康检查'}</span>
           </div>
-          <div className="border-t pt-2 mt-2">
+          <div className="border-t pt-2 mt-2 space-y-2">
             <div className="text-xs text-muted-foreground mb-1">{isEn ? 'Admin API (Requires API Key)' : '管理 API (需要 API Key)'}</div>
-            <div className="flex justify-between">
+            <div className="grid grid-cols-2 gap-2">
               <code className="text-muted-foreground">GET /admin/stats</code>
-              <span>{isEn ? 'Detailed Stats' : '详细统计'}</span>
+              <span className="text-right">{isEn ? 'Detailed Stats' : '详细统计'}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="grid grid-cols-2 gap-2">
               <code className="text-muted-foreground">GET /admin/accounts</code>
-              <span>{isEn ? 'Account List' : '账号列表'}</span>
+              <span className="text-right">{isEn ? 'Account List' : '账号列表'}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="grid grid-cols-2 gap-2">
               <code className="text-muted-foreground">GET /admin/logs</code>
-              <span>{isEn ? 'Request Logs' : '请求日志'}</span>
+              <span className="text-right">{isEn ? 'Request Logs' : '请求日志'}</span>
             </div>
           </div>
         </CardContent>
@@ -722,11 +759,11 @@ export function ProxyPanel() {
           <CardContent className="pt-2">
             <div className="max-h-[150px] overflow-y-auto text-xs font-mono space-y-0.5">
               {recentLogs.slice(0, 5).map((log, idx) => (
-                <div key={idx} className="flex items-center gap-3 py-1 px-2 rounded hover:bg-muted/50">
-                  <span className="text-muted-foreground shrink-0">{log.time}</span>
+                <div key={idx} className="grid grid-cols-4 gap-2 py-1 px-2 rounded hover:bg-muted/50 items-center">
+                  <span className="text-muted-foreground">{log.time}</span>
                   <span className="truncate" title={log.path}>{log.path}</span>
-                  <span className={`shrink-0 ml-auto ${log.status >= 400 ? 'text-red-500' : 'text-green-500'}`}>{log.status}</span>
-                  {log.tokens ? <span className="text-muted-foreground shrink-0">{log.tokens}</span> : null}
+                  <span className={`text-center ${log.status >= 400 ? 'text-red-500' : 'text-green-500'}`}>{log.status}</span>
+                  <span className="text-muted-foreground text-right">{log.credits ? log.credits.toFixed(4) : '-'}</span>
                 </div>
               ))}
             </div>
@@ -787,9 +824,14 @@ export function ProxyPanel() {
         open={showLogsDialog}
         onOpenChange={setShowLogsDialog}
         logs={recentLogs}
+        totalCredits={stats?.totalCredits || 0}
         onClearLogs={() => {
           setRecentLogs([])
           window.api.proxySaveLogs([])
+        }}
+        onResetCredits={async () => {
+          await window.api.proxyResetCredits()
+          fetchStatus()
         }}
         isEn={isEn}
       />

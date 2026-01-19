@@ -116,6 +116,8 @@ function initProxyServer(): ProxyServer {
 
   // 从 store 加载保存的配置，如果没有则使用默认配置
   const savedConfig = store?.get('proxyConfig') as Partial<ProxyConfig> | undefined
+  // 从 store 加载保存的累计 credits
+  const savedTotalCredits = (store?.get('proxyTotalCredits') as number) || 0
   const defaultConfig: ProxyConfig = {
     enabled: false,
     port: 5580,
@@ -181,9 +183,20 @@ function initProxyServer(): ProxyServer {
           refreshToken: account.refreshToken,
           expiresAt: account.expiresAt
         })
+      },
+      // Credits 更新回调 - 持久化累计 credits
+      onCreditsUpdate: (totalCredits) => {
+        if (store) {
+          store.set('proxyTotalCredits', totalCredits)
+        }
       }
     }
   )
+
+  // 恢复保存的累计 credits
+  if (savedTotalCredits > 0) {
+    proxyServer.setTotalCredits(savedTotalCredits)
+  }
 
   return proxyServer
 }
@@ -3756,6 +3769,14 @@ app.whenReady().then(async () => {
       config: proxyServer.getConfig(),
       stats: proxyServer.getStats()
     }
+  })
+
+  // IPC: 重置累计 credits
+  ipcMain.handle('proxy-reset-credits', () => {
+    if (proxyServer) {
+      proxyServer.resetTotalCredits()
+    }
+    return { success: true }
   })
 
   // IPC: 更新反代服务器配置
