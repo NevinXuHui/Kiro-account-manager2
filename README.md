@@ -271,6 +271,17 @@ The project is configured with GitHub Actions workflow for auto building all pla
 
 ## 📋 Changelog
 
+### v1.4.5 (2025-01-21)
+- 🐛 **Enterprise Account Dedup Fix**: Fixed enterprise accounts (no email) being incorrectly flagged as duplicates, now uses userId for checking
+- 🎨 **Subscription Badge Color**: Detail page subscription badge color now matches card (PRO+ purple, POWER gold, PRO blue)
+- 🔧 **Enterprise Identity Fix**: Fixed Enterprise account provider changing to Internal after refresh
+- ⚡ **Log Performance**: Use useMemo to cache filtered logs, optimize search logic, fix lag with large log volumes
+- 📐 **Detail Page Layout**: Fixed long account name/nickname causing layout wrap, auto-truncate long text
+- 📋 **Quick Copy Email**: Click account card email to copy to clipboard with "Copied!" feedback
+- 🔍 **Filter Enhancement**: Added Enterprise to IDP filter, added banned account filter
+- 🎨 **Filter Colors**: Subscription filter buttons now have colored styling (FREE gray, PRO blue, PRO+ purple, POWER gold)
+- 🐛 **Subscription Parse Fix**: Fixed PRO+/POWER subscription types not being correctly identified
+
 ### v1.4.4 (2025-01-21)
 - 📊 **Session Statistics**: Added request statistics for current service session, resets on service restart
 - 🎯 **Tray Menu Enhanced**: Tray menu shows total/session stats, subscription type, used/total credits, and supports language switching

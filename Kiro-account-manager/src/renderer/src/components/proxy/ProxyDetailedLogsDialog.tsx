@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Button, Badge, Input } from '../ui'
 import { Trash2, RefreshCw, Download, Search, X, Copy, ChevronDown, ChevronUp, ArrowDownToLine, Pause, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTranslation } from '../../hooks/useTranslation'
@@ -197,8 +197,10 @@ export function ProxyDetailedLogsDialog({ open, onOpenChange }: ProxyDetailedLog
     setExpandedLogs(newExpanded)
   }
 
-  // 获取所有类别
-  const categories = Array.from(new Set(logs.map(log => log.category))).sort()
+  // 获取所有类别（缓存）
+  const categories = useMemo(() => {
+    return Array.from(new Set(logs.map(log => log.category))).sort()
+  }, [logs])
 
   // 时间范围过滤
   const getTimeRangeMs = (range: string): number => {
@@ -218,10 +220,11 @@ export function ProxyDetailedLogsDialog({ open, onOpenChange }: ProxyDetailedLog
     }
   }
 
-  // 过滤日志
-  const filteredLogs = (() => {
+  // 过滤日志（缓存，避免每次渲染都重新计算）
+  const filteredLogs = useMemo(() => {
     const now = Date.now()
     const rangeMs = getTimeRangeMs(timeRange)
+    const search = searchText.toLowerCase()
     
     let result = logs.filter(log => {
       // 时间范围过滤
@@ -231,13 +234,21 @@ export function ProxyDetailedLogsDialog({ open, onOpenChange }: ProxyDetailedLog
       }
       if (levelFilter !== 'all' && log.level !== levelFilter) return false
       if (categoryFilter !== 'all' && log.category !== categoryFilter) return false
-      if (searchText) {
-        const search = searchText.toLowerCase()
-        return (
-          log.message.toLowerCase().includes(search) ||
-          log.category.toLowerCase().includes(search) ||
-          (log.data && JSON.stringify(log.data).toLowerCase().includes(search))
-        )
+      if (search) {
+        // 先检查 message 和 category（快速）
+        if (log.message.toLowerCase().includes(search) ||
+            log.category.toLowerCase().includes(search)) {
+          return true
+        }
+        // 只有在前面没匹配时才检查 data（慢）
+        if (log.data) {
+          try {
+            return JSON.stringify(log.data).toLowerCase().includes(search)
+          } catch {
+            return false
+          }
+        }
+        return false
       }
       return true
     })
@@ -249,7 +260,7 @@ export function ProxyDetailedLogsDialog({ open, onOpenChange }: ProxyDetailedLog
     }
     
     return result
-  })()
+  }, [logs, timeRange, levelFilter, categoryFilter, searchText, displayLimit])
 
   // 分页逻辑
   const totalPages = Math.ceil(filteredLogs.length / pageSize)

@@ -241,6 +241,7 @@ export const AccountCard = memo(function AccountCard({
   }
 
   const [copied, setCopied] = useState(false)
+  const [emailCopied, setEmailCopied] = useState(false)
 
   const handleCopyCredentials = (): void => {
     const credentials = {
@@ -454,7 +455,22 @@ export const AccountCard = memo(function AccountCard({
 
            <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                 <h3 className="font-semibold text-sm truncate text-foreground/90" title={getDisplayName(account)}>{account.email ? maskEmail(account.email) : getDisplayName(account)}</h3>
+                 <h3 
+                   className={cn(
+                     "font-semibold text-sm truncate cursor-pointer transition-colors",
+                     emailCopied ? "text-green-500" : "text-foreground/90 hover:text-primary"
+                   )}
+                   title={`${getDisplayName(account)} (${isEn ? 'Click to copy' : '点击复制'})`}
+                   onClick={(e) => {
+                     e.stopPropagation()
+                     const text = account.email || account.userId || ''
+                     if (text) {
+                       navigator.clipboard.writeText(text)
+                       setEmailCopied(true)
+                       setTimeout(() => setEmailCopied(false), 1500)
+                     }
+                   }}
+                 >{emailCopied ? (isEn ? 'Copied!' : '已复制!') : (account.email ? maskEmail(account.email) : getDisplayName(account))}</h3>
                  {/* Status Badge */}
                  <div className={cn(
                     "text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 flex-shrink-0",

@@ -664,6 +664,14 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
       )
     }
 
+    // 封禁筛选
+    if (filter.bannedOnly) {
+      result = result.filter((a) => 
+        a.lastError?.includes('UnauthorizedException') || 
+        a.lastError?.includes('AccountSuspendedException')
+      )
+    }
+
     // 应用排序
     result.sort((a, b) => {
       let cmp = 0
@@ -1079,7 +1087,7 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
               ...apiSub
             } : acc.subscription
 
-            // 转换 IDP 类型
+            // 转换 IDP 类型（保持原值优先，只有明确匹配时才更新）
             const apiIdp = result.data!.idp
             let idpType = acc.idp
             if (apiIdp) {
@@ -1087,7 +1095,8 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
               else if (apiIdp === 'Google') idpType = 'Google'
               else if (apiIdp === 'Github') idpType = 'Github'
               else if (apiIdp === 'AWSIdC') idpType = 'AWSIdC'
-              else idpType = 'Internal'
+              else if (apiIdp === 'Enterprise' || apiIdp === 'Internal') idpType = 'Enterprise'
+              // 未知类型保持原值，不强制改为 Internal
             }
 
             accounts.set(id, {
@@ -1207,7 +1216,8 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
         IAM_SSO: 0
       },
       activeCount: 0,
-      expiringSoonCount: 0
+      expiringSoonCount: 0,
+      bannedCount: 0
     }
 
     for (const account of accountList) {
@@ -1219,6 +1229,11 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
       if (account.subscription.daysRemaining !== undefined &&
           account.subscription.daysRemaining <= 7) {
         stats.expiringSoonCount++
+      }
+      // 统计封禁账号
+      if (account.lastError?.includes('UnauthorizedException') || 
+          account.lastError?.includes('AccountSuspendedException')) {
+        stats.bannedCount++
       }
     }
 

@@ -62,13 +62,14 @@ type LoginType = 'builderid' | 'google' | 'github' | 'iamsso'
 export function AddAccountDialog({ isOpen, onClose }: AddAccountDialogProps): React.ReactNode {
   const { addAccount, accounts, batchImportConcurrency, loginPrivateMode } = useAccountsStore()
 
-  // 检查账户是否已存在（同邮箱+同provider 或 同userId 才算重复）
+  // 检查账户是否已存在（同userId 或 同邮箱+同provider 才算重复）
   const isAccountExists = (email: string, userId: string, provider?: string): boolean => {
     return Array.from(accounts.values()).some(acc => {
-      // userId 相同则重复
-      if (acc.userId === userId) return true
-      // email 相同且 provider 相同则重复（允许同邮箱不同登录方式）
-      if (acc.email === email && acc.credentials.provider === provider) return true
+      // userId 相同则重复（主要判断依据）
+      if (userId && acc.userId === userId) return true
+      // email 非空且相同，且 provider 相同则重复（允许同邮箱不同登录方式）
+      // 企业账号可能没有 email，所以 email 为空时不用 email 判断
+      if (email && acc.email === email && acc.credentials.provider === provider) return true
       return false
     })
   }

@@ -1425,13 +1425,18 @@ app.whenReady().then(async () => {
       const creditUsage = usageData?.usageBreakdownList?.find(b => b.resourceType === 'CREDIT')
       const subscriptionTitle = usageData?.subscriptionInfo?.subscriptionTitle || 'KIRO'
       
-      // 规范化订阅类型
+      // 规范化订阅类型（注意检查顺序：先检查更具体的类型）
       let subscriptionType = 'Free'
-      if (subscriptionTitle.toUpperCase().includes('PRO')) {
-        subscriptionType = 'Pro'
-      } else if (subscriptionTitle.toUpperCase().includes('ENTERPRISE')) {
+      const titleUpper = subscriptionTitle.toUpperCase()
+      if (titleUpper.includes('PRO+') || titleUpper.includes('PRO_PLUS') || titleUpper.includes('PROPLUS')) {
+        subscriptionType = 'Pro_Plus'
+      } else if (titleUpper.includes('POWER')) {
         subscriptionType = 'Enterprise'
-      } else if (subscriptionTitle.toUpperCase().includes('TEAMS')) {
+      } else if (titleUpper.includes('PRO')) {
+        subscriptionType = 'Pro'
+      } else if (titleUpper.includes('ENTERPRISE')) {
+        subscriptionType = 'Enterprise'
+      } else if (titleUpper.includes('TEAMS')) {
         subscriptionType = 'Teams'
       }
 
@@ -1981,14 +1986,19 @@ app.whenReady().then(async () => {
                   nextResetDate: rawUsage.nextDateReset
                 }
                 
-                // 解析订阅信息
+                // 解析订阅信息（注意检查顺序：先检查更具体的类型）
                 const subscriptionTitle = rawUsage.subscriptionInfo?.subscriptionTitle || 'Free'
                 let subscriptionType = 'Free'
-                if (subscriptionTitle.toUpperCase().includes('PRO')) {
-                  subscriptionType = 'Pro'
-                } else if (subscriptionTitle.toUpperCase().includes('ENTERPRISE')) {
+                const titleUpper = subscriptionTitle.toUpperCase()
+                if (titleUpper.includes('PRO+') || titleUpper.includes('PRO_PLUS') || titleUpper.includes('PROPLUS')) {
+                  subscriptionType = 'Pro_Plus'
+                } else if (titleUpper.includes('POWER')) {
                   subscriptionType = 'Enterprise'
-                } else if (subscriptionTitle.toUpperCase().includes('TEAMS')) {
+                } else if (titleUpper.includes('PRO')) {
+                  subscriptionType = 'Pro'
+                } else if (titleUpper.includes('ENTERPRISE')) {
+                  subscriptionType = 'Enterprise'
+                } else if (titleUpper.includes('TEAMS')) {
                   subscriptionType = 'Teams'
                 }
                 
@@ -2240,14 +2250,19 @@ app.whenReady().then(async () => {
                 nextResetDate: rawUsage.nextDateReset
               }
 
-              // 解析订阅信息（从用量响应中获取）
+              // 解析订阅信息（注意检查顺序：先检查更具体的类型）
               const subscriptionTitle = rawUsage.subscriptionInfo?.subscriptionTitle ?? 'Free'
               let subscriptionType = 'Free'
-              if (subscriptionTitle.toUpperCase().includes('PRO')) {
-                subscriptionType = 'Pro'
-              } else if (subscriptionTitle.toUpperCase().includes('ENTERPRISE')) {
+              const titleUpper = subscriptionTitle.toUpperCase()
+              if (titleUpper.includes('PRO+') || titleUpper.includes('PRO_PLUS') || titleUpper.includes('PROPLUS')) {
+                subscriptionType = 'Pro_Plus'
+              } else if (titleUpper.includes('POWER')) {
                 subscriptionType = 'Enterprise'
-              } else if (subscriptionTitle.toUpperCase().includes('TEAMS')) {
+              } else if (titleUpper.includes('PRO')) {
+                subscriptionType = 'Pro'
+              } else if (titleUpper.includes('ENTERPRISE')) {
+                subscriptionType = 'Enterprise'
+              } else if (titleUpper.includes('TEAMS')) {
                 subscriptionType = 'Teams'
               }
               
@@ -2481,14 +2496,19 @@ app.whenReady().then(async () => {
       const email = usageResult.userInfo?.email || ''
       const userId = usageResult.userInfo?.userId || ''
       
-      // 解析订阅类型
+      // 解析订阅类型（注意检查顺序：先检查更具体的类型）
       const subscriptionTitle = usageResult.subscriptionInfo?.subscriptionTitle || 'Free'
       let subscriptionType = 'Free'
-      if (subscriptionTitle.toUpperCase().includes('PRO')) {
-        subscriptionType = 'Pro'
-      } else if (subscriptionTitle.toUpperCase().includes('ENTERPRISE')) {
+      const titleUpper = subscriptionTitle.toUpperCase()
+      if (titleUpper.includes('PRO+') || titleUpper.includes('PRO_PLUS') || titleUpper.includes('PROPLUS')) {
+        subscriptionType = 'Pro_Plus'
+      } else if (titleUpper.includes('POWER')) {
         subscriptionType = 'Enterprise'
-      } else if (subscriptionTitle.toUpperCase().includes('TEAMS')) {
+      } else if (titleUpper.includes('PRO')) {
+        subscriptionType = 'Pro'
+      } else if (titleUpper.includes('ENTERPRISE')) {
+        subscriptionType = 'Enterprise'
+      } else if (titleUpper.includes('TEAMS')) {
         subscriptionType = 'Teams'
       }
       

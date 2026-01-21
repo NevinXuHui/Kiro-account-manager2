@@ -36,6 +36,19 @@ function getDisplayName(account: Account): string {
   return 'Unknown'
 }
 
+// 订阅类型对应颜色
+const getSubscriptionColor = (type: string, title?: string): string => {
+  const text = (title || type).toUpperCase()
+  // KIRO PRO+ / PRO_PLUS - 紫色
+  if (text.includes('PRO+') || text.includes('PRO_PLUS') || text.includes('PROPLUS')) return 'bg-purple-500'
+  // KIRO POWER - 金色
+  if (text.includes('POWER')) return 'bg-amber-500'
+  // KIRO PRO - 蓝色
+  if (text.includes('PRO')) return 'bg-blue-500'
+  // KIRO FREE - 灰色
+  return 'bg-gray-500'
+}
+
 // 格式化日期
 const formatDate = (date: unknown): string => {
   if (!date) return '-'
@@ -125,10 +138,10 @@ export function AccountDetailDialog({
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shadow-inner">
               <User className="h-6 w-6 text-primary" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-lg">{account.email ? maskEmail(account.email) : getDisplayName(account)}</span>
-                <Badge className="bg-primary hover:bg-primary/90 text-white shadow-sm">
+                <span className="font-bold text-lg truncate max-w-[300px]" title={account.email || getDisplayName(account)}>{account.email ? maskEmail(account.email) : getDisplayName(account)}</span>
+                <Badge className={cn(getSubscriptionColor(subscription.type, subscription.title), "hover:opacity-90 text-white shadow-sm flex-shrink-0")}>
                   {subscription.title || subscription.type}
                 </Badge>
               </div>
@@ -274,9 +287,9 @@ export function AccountDetailDialog({
                    <div className="text-sm font-mono break-all select-all">{account.email ? maskEmail(account.email) : getDisplayName(account)}</div>
                  </div>
                  <div className="grid grid-cols-2 gap-4">
-                   <div className="space-y-1">
+                   <div className="space-y-1 min-w-0">
                       <label className="text-xs font-medium text-muted-foreground">{isEn ? 'Nickname' : '账号别名'}</label>
-                      <div className="text-sm font-medium">{maskNickname(account.nickname) || '-'}</div>
+                      <div className="text-sm font-medium truncate" title={account.nickname || '-'}>{maskNickname(account.nickname) || '-'}</div>
                    </div>
                    <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">{isEn ? 'Provider' : '身份提供商'}</label>

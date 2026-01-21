@@ -4,11 +4,11 @@ import { useTranslation } from '@/hooks/useTranslation'
 import type { AccountFilter as FilterType, SubscriptionType, AccountStatus, IdpType } from '@/types/account'
 import { cn } from '@/lib/utils'
 
-const SubscriptionOptions: { value: SubscriptionType; label: string }[] = [
-  { value: 'Free', label: 'KIRO FREE' },
-  { value: 'Pro', label: 'KIRO PRO' },
-  { value: 'Pro_Plus', label: 'KIRO PRO+' },
-  { value: 'Enterprise', label: 'KIRO POWER' }
+const SubscriptionOptions: { value: SubscriptionType; label: string; color: string; activeColor: string }[] = [
+  { value: 'Free', label: 'KIRO FREE', color: 'text-gray-500 border-gray-300', activeColor: 'bg-gray-500 text-white border-gray-500' },
+  { value: 'Pro', label: 'KIRO PRO', color: 'text-blue-500 border-blue-300', activeColor: 'bg-blue-500 text-white border-blue-500' },
+  { value: 'Pro_Plus', label: 'KIRO PRO+', color: 'text-purple-500 border-purple-300', activeColor: 'bg-purple-500 text-white border-purple-500' },
+  { value: 'Enterprise', label: 'KIRO POWER', color: 'text-amber-500 border-amber-300', activeColor: 'bg-amber-500 text-white border-amber-500' }
 ]
 
 const StatusOptionsZh: { value: AccountStatus; label: string }[] = [
@@ -28,8 +28,9 @@ const StatusOptionsEn: { value: AccountStatus; label: string }[] = [
 const IdpOptions: { value: IdpType; label: string }[] = [
   { value: 'Google', label: 'Google' },
   { value: 'Github', label: 'GitHub' },
-  { value: 'BuilderId', label: 'AWS Builder ID' },
-  { value: 'AWSIdC', label: 'AWS IAM IdC' }
+  { value: 'BuilderId', label: 'BuilderId' },
+  { value: 'Enterprise', label: 'Enterprise' },
+  { value: 'AWSIdC', label: 'AWSIdC' }
 ]
 
 // 解析 ARGB 颜色转换为 CSS rgba
@@ -65,7 +66,8 @@ export function AccountFilterPanel(): React.ReactNode {
     filter.usageMin !== undefined ||
     filter.usageMax !== undefined ||
     filter.daysRemainingMin !== undefined ||
-    filter.daysRemainingMax !== undefined
+    filter.daysRemainingMax !== undefined ||
+    filter.bannedOnly
   )
 
   const toggleArrayFilter = <T extends string>(
@@ -125,9 +127,7 @@ export function AccountFilterPanel(): React.ReactNode {
                       key={option.value}
                       className={cn(
                         'px-2 py-0.5 text-xs rounded border transition-colors',
-                        isActive
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'hover:bg-muted'
+                        isActive ? option.activeColor : `hover:bg-muted/50 ${option.color}`
                       )}
                       onClick={() => toggleArrayFilter('subscriptionTypes', option.value)}
                     >
@@ -160,6 +160,18 @@ export function AccountFilterPanel(): React.ReactNode {
                     </button>
                   )
                 })}
+                {/* 封禁筛选 */}
+                <button
+                  className={cn(
+                    'px-2 py-0.5 text-xs rounded border transition-colors',
+                    filter.bannedOnly
+                      ? 'bg-red-500 text-white border-red-500'
+                      : 'hover:bg-muted text-red-500 border-red-200'
+                  )}
+                  onClick={() => setFilter({ ...filter, bannedOnly: !filter.bannedOnly })}
+                >
+                  {isEn ? 'Banned' : '已封禁'}({stats.bannedCount})
+                </button>
               </div>
             </div>
 

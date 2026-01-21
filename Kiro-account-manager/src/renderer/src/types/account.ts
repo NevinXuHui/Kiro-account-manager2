@@ -153,6 +153,7 @@ export interface AccountFilter {
   usageMax?: number
   daysRemainingMin?: number
   daysRemainingMax?: number
+  bannedOnly?: boolean // 仅显示封禁账号
 }
 
 /**
@@ -222,4 +223,5 @@ export interface AccountStats {
   byIdp: Record<IdpType, number>
   activeCount: number
   expiringSoonCount: number // 7天内到期
+  bannedCount: number // 封禁账号数
 }

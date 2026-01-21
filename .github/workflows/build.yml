@@ -14,6 +14,8 @@ jobs:
     outputs:
       version: ${{ steps.get_version.outputs.version }}
       tag_name: ${{ steps.get_version.outputs.tag_name }}
+      changelog_en: ${{ steps.extract_changelog.outputs.changelog_en }}
+      changelog_cn: ${{ steps.extract_changelog.outputs.changelog_cn }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,6 +33,25 @@ jobs:
           fi
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "Version: $VERSION, Tag: $TAG_NAME"
+
+      - name: Extract changelog from README
+        id: extract_changelog
+        run: |
+          # 提取英文更新日志（从 ### v 开始到下一个 ### 或文件结束）
+          CHANGELOG_EN=$(awk '/^### v[0-9]+\.[0-9]+\.[0-9]+/{if(found) exit; found=1} found' README.md)
+          # 提取中文更新日志
+          CHANGELOG_CN=$(awk '/^### v[0-9]+\.[0-9]+\.[0-9]+/{if(found) exit; found=1} found' README_CN.md)
+          
+          # 使用 EOF 处理多行输出
+          echo "changelog_en<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_EN" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "changelog_cn<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CN" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "Extracted changelog for release"
 
   build-windows:
     needs: get-version
@@ -294,7 +315,15 @@ jobs:
           tag_name: ${{ needs.get-version.outputs.tag_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true
+          generate_release_notes: false
+          body: |
+            ## 🌟 更新内容 | What's New
+
+            ${{ needs.get-version.outputs.changelog_cn }}
+
+            ---
+
+            ${{ needs.get-version.outputs.changelog_en }}
           files: |
             artifacts/**/*.exe
             artifacts/**/*.zip
