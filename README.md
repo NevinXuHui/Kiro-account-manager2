@@ -275,7 +275,9 @@ The project is configured with GitHub Actions workflow for auto building all pla
 - 📊 **Request Logs Token Detail**: Added Input/Output tokens columns to request logs table
 - 📊 **Recent Requests Enhancement**: Recent requests preview also shows Input/Output tokens
 - 📐 **Logs Dialog Width**: Increased request logs dialog width from 700px to 900px
-- 🔧 **Machine ID Page Fix**: Fixed copy/refresh buttons not responding to clicks
+- 🎯 **Toolbar Layout Optimization**: Account management toolbar buttons right-aligned with reduced spacing
+- � **Trial/Bonus Quota Display**: Fixed REST API freeTrialInfo and bonuses display with unified timestamp format
+- �🔧 **Machine ID Page Fix**: Fixed copy/refresh buttons not responding to clicks
 - ✅ **Copy Feedback**: Machine ID page copy button now shows "Copied!" feedback
 - 🔄 **Refresh Animation**: Machine ID refresh button now shows spinning animation
 
