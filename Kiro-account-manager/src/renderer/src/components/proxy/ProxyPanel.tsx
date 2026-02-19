@@ -72,7 +72,7 @@ export function ProxyPanel() {
   const [isRunning, setIsRunning] = useState(false)
   const [config, setConfig] = useState<ProxyConfig>({
     enabled: false,
-    port: 5580,
+    port: 8990,
     host: '127.0.0.1',
     enableMultiAccount: true,
     logRequests: true
@@ -472,9 +472,22 @@ export function ProxyPanel() {
                 type="number"
                 value={config.port}
                 onChange={(e) => {
-                  const newPort = parseInt(e.target.value) || 5580
-                  setConfig(prev => ({ ...prev, port: newPort }))
-                  window.api.proxyUpdateConfig({ port: newPort })
+                  const value = e.target.value
+                  if (value === '') {
+                    setConfig(prev => ({ ...prev, port: '' as any }))
+                    return
+                  }
+                  const newPort = parseInt(value)
+                  if (!isNaN(newPort) && newPort > 0 && newPort <= 65535) {
+                    setConfig(prev => ({ ...prev, port: newPort }))
+                    window.api.proxyUpdateConfig({ port: newPort })
+                  }
+                }}
+                onBlur={(e) => {
+                  if (e.target.value === '' || parseInt(e.target.value) <= 0) {
+                    setConfig(prev => ({ ...prev, port: 8990 }))
+                    window.api.proxyUpdateConfig({ port: 8990 })
+                  }
                 }}
                 disabled={isRunning}
               />

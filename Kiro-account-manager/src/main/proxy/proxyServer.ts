@@ -50,7 +50,7 @@ export class ProxyServer {
   constructor(config: Partial<ProxyConfig> = {}, events: ProxyServerEvents = {}) {
     this.config = {
       enabled: false,
-      port: 5580,
+      port: 8990,
       host: '127.0.0.1',
       enableMultiAccount: true,
       selectedAccountIds: [],

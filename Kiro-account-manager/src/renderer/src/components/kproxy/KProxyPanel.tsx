@@ -331,7 +331,22 @@ export function KProxyPanel() {
               <Input
                 type="number"
                 value={config.port}
-                onChange={(e) => updateConfig({ port: parseInt(e.target.value) || 8899 })}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (value === '') {
+                    updateConfig({ port: '' as any })
+                    return
+                  }
+                  const newPort = parseInt(value)
+                  if (!isNaN(newPort) && newPort > 0 && newPort <= 65535) {
+                    updateConfig({ port: newPort })
+                  }
+                }}
+                onBlur={(e) => {
+                  if (e.target.value === '' || parseInt(e.target.value) <= 0) {
+                    updateConfig({ port: 8899 })
+                  }
+                }}
                 disabled={isRunning}
                 className="h-8"
               />
