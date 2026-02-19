@@ -117,6 +117,56 @@ npm run typecheck
 
 ---
 
+## 📦 打包
+
+### macOS 打包
+
+使用提供的打包脚本快速构建 macOS 应用：
+
+```bash
+# 基础打包（x64 架构）
+./build-mac.sh
+
+# 打包 Apple Silicon (arm64)
+./build-mac.sh --arch arm64
+
+# 打包通用版本（x64 + arm64）
+./build-mac.sh --arch universal
+
+# 跳过依赖安装（加快打包速度）
+./build-mac.sh --skip-install
+
+# 代码签名（需要 Apple 开发者证书）
+./build-mac.sh --sign
+
+# 代码签名 + 公证（需要 Apple 开发者账号）
+./build-mac.sh --notarize
+```
+
+**签名和公证环境变量：**
+
+```bash
+export APPLE_ID="your-apple-id@example.com"
+export APPLE_ID_PASSWORD="app-specific-password"
+export APPLE_TEAM_ID="your-team-id"
+```
+
+### Windows 打包
+
+```bash
+npm run build:win
+```
+
+### Linux 打包
+
+```bash
+npm run build:linux
+```
+
+打包完成后，生成的文件位于 `dist/` 目录
+
+---
+
 ## 📋 更新日志
 
 查看 [根目录 README](../README_CN.md#-更新日志) 获取完整更新日志。

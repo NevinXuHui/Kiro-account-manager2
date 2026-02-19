@@ -117,6 +117,56 @@ npm run typecheck
 
 ---
 
+## 📦 Building
+
+### macOS Build
+
+Use the provided build script for quick macOS app packaging:
+
+```bash
+# Basic build (x64 architecture)
+./build-mac.sh
+
+# Build for Apple Silicon (arm64)
+./build-mac.sh --arch arm64
+
+# Build universal binary (x64 + arm64)
+./build-mac.sh --arch universal
+
+# Skip dependency installation (faster builds)
+./build-mac.sh --skip-install
+
+# Code signing (requires Apple Developer certificate)
+./build-mac.sh --sign
+
+# Code signing + notarization (requires Apple Developer account)
+./build-mac.sh --notarize
+```
+
+**Environment variables for signing and notarization:**
+
+```bash
+export APPLE_ID="your-apple-id@example.com"
+export APPLE_ID_PASSWORD="app-specific-password"
+export APPLE_TEAM_ID="your-team-id"
+```
+
+### Windows Build
+
+```bash
+npm run build:win
+```
+
+### Linux Build
+
+```bash
+npm run build:linux
+```
+
+Built files will be located in the `dist/` directory
+
+---
+
 ## 📋 Changelog
 
 See [root README](../README.md#-changelog) for full changelog.

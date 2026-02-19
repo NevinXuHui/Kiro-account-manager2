@@ -33,6 +33,7 @@ nsis:
   installerIcon: resources/kiro-high-resolution-logo-transparent.ico
   uninstallerIcon: resources/kiro-high-resolution-logo-transparent.ico
 mac:
+  target: dmg  # 只生成 DMG 包
   identity: null  # 跳过代码签名（没有 Apple 开发者证书时）
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
