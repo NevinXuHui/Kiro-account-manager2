@@ -248,7 +248,10 @@ export const AccountCard = memo(function AccountCard({
       accessToken: account.credentials.accessToken,
       refreshToken: account.credentials.refreshToken,
       clientId: account.credentials.clientId,
-      clientSecret: account.credentials.clientSecret
+      clientSecret: account.credentials.clientSecret,
+      region: account.credentials.region || 'us-east-1',
+      authMethod: account.credentials.authMethod || 'IdC',
+      provider: account.credentials.provider || 'BuilderId'
     }
     navigator.clipboard.writeText(JSON.stringify(credentials, null, 2))
     setCopied(true)
