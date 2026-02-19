@@ -249,7 +249,7 @@ function initProxyServer(): ProxyServer {
   const savedFailedRequests = (store?.get('proxyFailedRequests') as number) || 0
   const defaultConfig: ProxyConfig = {
     enabled: false,
-    port: 5580,
+    port: 8990,
     host: '127.0.0.1',
     enableMultiAccount: true,
     selectedAccountIds: [],
@@ -1427,6 +1427,8 @@ function initTray(): void {
 
 function createWindow(): void {
   // Create the browser window.
+  console.log('[Window] Creating window with icon path:', icon)
+
   mainWindow = new BrowserWindow({
     title: `Kiro 账号管理器 v${app.getVersion()}`,
     width: 1200,   // 刚好容纳 3 列卡片 (340*3 + 16*2 + 边距)
@@ -1487,7 +1489,7 @@ function createWindow(): void {
         }
         
         await server.start()
-        console.log('[ProxyServer] Auto-started successfully on port', savedProxyConfig.port || 5580)
+        console.log('[ProxyServer] Auto-started successfully on port', savedProxyConfig.port || 8990)
       } catch (error) {
         console.error('[ProxyServer] Auto-start failed:', error)
       }
@@ -5249,9 +5251,81 @@ app.whenReady().then(async () => {
         // Linux: 复制到系统 CA 目录
         const fs = await import('fs')
         const targetPath = '/usr/local/share/ca-certificates/kproxy-ca.crt'
-        fs.copyFileSync(caInfo.certPath, targetPath)
-        execSync('sudo update-ca-certificates')
-        return { success: true, message: 'CA certificate installed to Linux CA store' }
+
+        console.log('[KProxy] Installing CA cert on Linux')
+        console.log('[KProxy] Source cert path:', caInfo.certPath)
+        console.log('[KProxy] Target path:', targetPath)
+
+        try {
+          // 尝试使用 pkexec（图形化权限提升）
+          const { spawn } = await import('child_process')
+
+          // 先复制证书到临时位置
+          const tmpPath = `/tmp/kproxy-ca-${Date.now()}.crt`
+          fs.copyFileSync(caInfo.certPath, tmpPath)
+          console.log('[KProxy] Copied cert to temp:', tmpPath)
+
+          // 使用 pkexec 执行安装脚本
+          const installScript = `
+            cp "${tmpPath}" "${targetPath}" && \
+            update-ca-certificates && \
+            rm -f "${tmpPath}"
+          `
+
+          console.log('[KProxy] Executing pkexec with script')
+
+          await new Promise<void>((resolve, reject) => {
+            const proc = spawn('pkexec', ['sh', '-c', installScript])
+
+            let stdout = ''
+            let stderr = ''
+
+            proc.stdout?.on('data', (data) => {
+              stdout += data.toString()
+            })
+
+            proc.stderr?.on('data', (data) => {
+              stderr += data.toString()
+            })
+
+            proc.on('exit', (code) => {
+              console.log('[KProxy] pkexec exit code:', code)
+              if (stdout) console.log('[KProxy] stdout:', stdout)
+              if (stderr) console.log('[KProxy] stderr:', stderr)
+
+              if (code === 0) {
+                resolve()
+              } else if (code === 126) {
+                reject(new Error('用户取消了权限请求'))
+              } else if (code === 127) {
+                reject(new Error('pkexec 命令未找到'))
+              } else {
+                reject(new Error(`安装失败，退出码: ${code}${stderr ? '\n' + stderr : ''}`))
+              }
+            })
+
+            proc.on('error', (err) => {
+              console.error('[KProxy] pkexec spawn error:', err)
+              reject(err)
+            })
+          })
+
+          console.log('[KProxy] CA cert installed successfully')
+          return { success: true, message: 'CA certificate installed to Linux CA store' }
+        } catch (error) {
+          console.error('[KProxy] Install failed:', error)
+          // 如果 pkexec 失败，提供手动安装说明
+          const errMsg = error instanceof Error ? error.message : String(error)
+          if (errMsg.includes('pkexec') || errMsg.includes('ENOENT') || errMsg.includes('未找到')) {
+            return {
+              success: false,
+              error: '需要管理员权限。请手动运行:\n' +
+                     `sudo cp "${caInfo.certPath}" "${targetPath}"\n` +
+                     'sudo update-ca-certificates'
+            }
+          }
+          throw error
+        }
       }
     } catch (error) {
       console.error('[KProxy] Install CA cert failed:', error)
@@ -5285,11 +5359,51 @@ app.whenReady().then(async () => {
         // Linux: 删除证书并更新
         const fs = await import('fs')
         const targetPath = '/usr/local/share/ca-certificates/kproxy-ca.crt'
-        if (fs.existsSync(targetPath)) {
-          fs.unlinkSync(targetPath)
-          execSync('sudo update-ca-certificates --fresh')
+
+        if (!fs.existsSync(targetPath)) {
+          return { success: true, message: 'CA certificate not found in store' }
         }
-        return { success: true, message: 'CA certificate removed from Linux CA store' }
+
+        try {
+          // 使用 pkexec 删除证书
+          const { spawn } = await import('child_process')
+
+          const uninstallScript = `
+            rm -f "${targetPath}" && \
+            update-ca-certificates --fresh
+          `
+
+          await new Promise<void>((resolve, reject) => {
+            const proc = spawn('pkexec', ['sh', '-c', uninstallScript])
+
+            proc.on('exit', (code) => {
+              if (code === 0) {
+                resolve()
+              } else if (code === 126) {
+                reject(new Error('用户取消了权限请求'))
+              } else {
+                reject(new Error(`卸载失败，退出码: ${code}`))
+              }
+            })
+
+            proc.on('error', (err) => {
+              reject(err)
+            })
+          })
+
+          return { success: true, message: 'CA certificate removed from Linux CA store' }
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error)
+          if (errMsg.includes('pkexec') || errMsg.includes('ENOENT')) {
+            return {
+              success: false,
+              error: '需要管理员权限。请手动运行:\n' +
+                     `sudo rm -f "${targetPath}"\n` +
+                     'sudo update-ca-certificates --fresh'
+            }
+          }
+          throw error
+        }
       }
     } catch (error) {
       console.error('[KProxy] Uninstall CA cert failed:', error)

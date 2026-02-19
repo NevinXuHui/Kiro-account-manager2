@@ -514,37 +514,62 @@ async function setLinuxMachineId(newMachineId: string): Promise<MachineIdResult>
  */
 async function setLinuxMachineIdWithPkexec(rawId: string, filePath: string): Promise<MachineIdResult> {
   const sudoCommands = ['pkexec', 'gksudo', 'kdesudo']
-  
+
   for (const cmd of sudoCommands) {
     try {
       // 检查命令是否存在
       execSync(`which ${cmd}`, { stdio: 'ignore' })
-      
-      // 使用 pkexec/gksudo 调用 tee 命令写入文件
-      // tee 命令可以以 root 权限写入文件
-      const command = `echo "${rawId}" | ${cmd} tee "${filePath}" > /dev/null`
-      console.log(`[MachineId] Running: ${cmd} to write machine-id`)
-      
-      await execAsync(command)
-      
-      // 如果还有 /var/lib/dbus/machine-id，也更新它
-      if (filePath === '/etc/machine-id') {
-        const dbusPath = '/var/lib/dbus/machine-id'
-        if (fs.existsSync(dbusPath)) {
-          try {
-            const dbusCommand = `echo "${rawId}" | ${cmd} tee "${dbusPath}" > /dev/null`
-            await execAsync(dbusCommand)
-          } catch {
-            // 忽略 dbus machine-id 更新失败
+
+      console.log(`[MachineId] Using ${cmd} to write machine-id`)
+
+      // 创建临时脚本文件
+      const tmpScript = `/tmp/set-machine-id-${Date.now()}.sh`
+      const scriptContent = `#!/bin/bash
+echo "${rawId}" > "${filePath}"
+chmod 444 "${filePath}"
+`
+
+      // 写入临时脚本
+      fs.writeFileSync(tmpScript, scriptContent, { mode: 0o755 })
+
+      try {
+        // 使用 pkexec 执行脚本
+        await execAsync(`${cmd} sh "${tmpScript}"`)
+
+        // 如果还有 /var/lib/dbus/machine-id，也更新它
+        if (filePath === '/etc/machine-id') {
+          const dbusPath = '/var/lib/dbus/machine-id'
+          if (fs.existsSync(dbusPath)) {
+            try {
+              const dbusScript = `/tmp/set-dbus-machine-id-${Date.now()}.sh`
+              const dbusScriptContent = `#!/bin/bash
+echo "${rawId}" > "${dbusPath}"
+chmod 444 "${dbusPath}"
+`
+              fs.writeFileSync(dbusScript, dbusScriptContent, { mode: 0o755 })
+              await execAsync(`${cmd} sh "${dbusScript}"`)
+              fs.unlinkSync(dbusScript)
+            } catch {
+              // 忽略 dbus machine-id 更新失败
+            }
           }
         }
+
+        // 清理临时脚本
+        fs.unlinkSync(tmpScript)
+
+        return { success: true, machineId: rawId }
+      } catch (error) {
+        // 清理临时脚本
+        try {
+          fs.unlinkSync(tmpScript)
+        } catch {}
+        throw error
       }
-      
-      return { success: true, machineId: rawId }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : ''
       console.log(`[MachineId] ${cmd} failed:`, errorMsg)
-      
+
       // 用户取消授权
       if (errorMsg.includes('dismissed') || errorMsg.includes('Not authorized') || errorMsg.includes('126')) {
         return { success: false, error: '用户取消了授权' }
@@ -553,7 +578,7 @@ async function setLinuxMachineIdWithPkexec(rawId: string, filePath: string): Pro
       continue
     }
   }
-  
+
   return { success: false, error: '没有可用的权限提升工具', requiresAdmin: true }
 }
 
