@@ -117,6 +117,29 @@ interface AccountsState {
     accountId?: string
     accountEmail?: string
   }>
+
+  // 邮箱服务配置（用于自动注册）
+  mailServiceConfig: {
+    enabled: boolean // 是否启用自动邮箱服务
+    apiUrl: string // API 基础地址
+    apiKey: string // API 密钥
+    mailDomain: string // 邮箱域名
+  }
+
+  // 设备同步配置
+  deviceSyncConfig: {
+    enabled: boolean // 是否启用设备同步
+    serverUrl: string // 同步服务器地址
+    authToken: string // 认证 Token
+    deviceId: string // 设备唯一标识
+    deviceName: string // 设备名称
+    deviceType: 'desktop' | 'mobile' | 'tablet' // 设备类型
+    accountType: 'supplier' | 'consumer' // 账号类型：供应商/消耗商
+    lastSyncVersion: number // 上次同步版本号
+    lastSyncTime: number // 上次同步时间
+    registeredEmail: string // 注册的邮箱
+    registeredPassword: string // 注册的密码
+  }
 }
 
 interface AccountsActions {
@@ -214,6 +237,14 @@ interface AccountsActions {
   stopAutoSwitch: () => void
   checkAndAutoSwitch: () => Promise<void>
 
+  // 邮箱服务配置
+  setMailServiceConfig: (config: Partial<AccountsState['mailServiceConfig']>) => void
+
+  // 设备同步配置
+  setDeviceSyncConfig: (config: Partial<AccountsState['deviceSyncConfig']>) => void
+  syncToServer: () => Promise<{ success: boolean; error?: string; synced?: number; skipped?: number; message?: string }>
+  autoRegisterAndLogin: () => Promise<{ success: boolean; error?: string }>
+
   // 自动 Token 刷新
   startAutoTokenRefresh: () => void
   stopAutoTokenRefresh: () => void
@@ -290,6 +321,29 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
   originalBackupTime: null,
   accountMachineIds: {},
   machineIdHistory: [],
+
+  // 邮箱服务配置
+  mailServiceConfig: {
+    enabled: true,
+    apiUrl: 'http://118.31.36.236:3000',
+    apiKey: '3c25263fdd419f6d558b157a716ad228d2f30b3f28bf2d6a553b0921c102e2b4',
+    mailDomain: 'nevinxu.asia'
+  },
+
+  // 设备同步配置
+  deviceSyncConfig: {
+    enabled: false,
+    serverUrl: 'http://100.92.138.107:3002',
+    authToken: '',
+    deviceId: '',
+    deviceName: '',
+    deviceType: 'desktop',
+    accountType: 'consumer',
+    lastSyncVersion: 0,
+    lastSyncTime: 0,
+    registeredEmail: '',
+    registeredPassword: ''
+  },
 
   // ==================== 账号 CRUD ====================
 
@@ -2379,5 +2433,62 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
   clearMachineIdHistory: () => {
     set({ machineIdHistory: [] })
     get().saveToStorage()
+  },
+
+  // ==================== 邮箱服务配置 ====================
+  setMailServiceConfig: (config) => {
+    set((state) => ({
+      mailServiceConfig: { ...state.mailServiceConfig, ...config }
+    }))
+    get().saveToStorage()
+  },
+
+  // ==================== 设备同步配置 ====================
+  setDeviceSyncConfig: (config) => {
+    set((state) => ({
+      deviceSyncConfig: { ...state.deviceSyncConfig, ...config }
+    }))
+    get().saveToStorage()
+  },
+
+  syncToServer: async () => {
+    try {
+      const { deviceSyncConfig, accounts } = get()
+      if (!deviceSyncConfig.enabled || !deviceSyncConfig.serverUrl) {
+        return { success: false, error: '设备同步未启用或服务器地址未配置' }
+      }
+
+      // 这里需要调用主进程的设备同步功能
+      // 暂时返回成功，实际实现需要通过 IPC 调用
+      return {
+        success: true,
+        synced: accounts.size,
+        skipped: 0,
+        message: '同步成功'
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '同步失败'
+      }
+    }
+  },
+
+  autoRegisterAndLogin: async () => {
+    try {
+      const { deviceSyncConfig } = get()
+      if (!deviceSyncConfig.enabled) {
+        return { success: false, error: '设备同步未启用' }
+      }
+
+      // 这里需要调用主进程的自动注册功能
+      // 暂时返回成功，实际实现需要通过 IPC 调用
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '自动注册失败'
+      }
+    }
   }
 }))

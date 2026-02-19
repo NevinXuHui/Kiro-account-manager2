@@ -762,6 +762,61 @@ interface KiroApi {
 
   // 发送关闭确认对话框响应
   sendCloseConfirmResponse: (action: 'minimize' | 'quit' | 'cancel', rememberChoice: boolean) => void
+
+  // ============ 自动注册 API ============
+
+  // 自动注册 AWS 账号
+  autoRegisterAWS: (options: {
+    email: string | null
+    proxyUrl?: string
+    testLoginDetection?: boolean
+    keepBrowserOpen?: boolean
+    mailServiceConfig?: {
+      enabled: boolean
+      apiUrl: string
+      apiKey: string
+      mailDomain: string
+    }
+  }) => Promise<{
+    success: boolean
+    email?: string
+    password?: string
+    awsName?: string
+    ssoToken?: string
+    error?: string
+  }>
+
+  // 监听自动注册日志
+  onAutoRegisterLog: (callback: (data: { email: string; message: string }) => void) => () => void
+
+  // 打开文件选择对话框
+  openFile: (options?: {
+    title?: string
+    filters?: Array<{ name: string; extensions: string[] }>
+    properties?: Array<'openFile' | 'openDirectory' | 'multiSelections'>
+  }) => Promise<{ canceled: boolean; filePaths: string[] }>
+
+  // 读取文件内容
+  readFile: (filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>
+
+  // 获取设备信息
+  getDeviceInfo: () => Promise<{
+    platform: string
+    arch: string
+    hostname: string
+    cpus: number
+    memory: number
+    deviceId: string
+    deviceName: string
+    deviceType: 'desktop' | 'mobile' | 'tablet'
+  }>
+
+  // 测试邮箱服务
+  testMailService: (config: {
+    apiUrl: string
+    apiKey: string
+    mailDomain: string
+  }) => Promise<{ success: boolean; error?: string; message?: string }>
 }
 
 declare global {

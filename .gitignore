@@ -37,3 +37,32 @@ docs/CodeWhispererRuntimeService API.md
 docs/Kiro API.md
 kiro_token.json
 Kiro.code-workspace
+
+# macOS 系统文件
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# 编辑器历史记录和配置
+.history/
+.lh/
+.vscode/
+.idea/
+
+# oh-my-claudecode 配置
+.omc/
+
+# spec-workflow 配置
+.spec-workflow/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 临时文件
+*.log
+*.tmp
+*.swp
+*~

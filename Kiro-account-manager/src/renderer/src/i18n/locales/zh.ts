@@ -44,6 +44,7 @@ const zh = {
   nav: {
     home: '主页',
     accounts: '账户管理',
+    autoRegister: '自动注册',
     machineId: '机器码',
     kiroSettings: 'Kiro 设置',
     proxy: 'API 反代',

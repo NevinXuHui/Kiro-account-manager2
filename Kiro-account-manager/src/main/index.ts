@@ -605,7 +605,11 @@ interface SsoAuthResult {
   error?: string
 }
 
-async function ssoDeviceAuth(bearerToken: string, region: string = 'us-east-1'): Promise<SsoAuthResult> {
+export async function ssoDeviceAuth(bearerToken: string, region: string = 'us-east-1', log?: (message: string) => void): Promise<SsoAuthResult> {
+  const logMessage = (msg: string) => {
+    if (log) log(msg)
+    else console.log(msg)
+  }
   const oidcBase = `https://oidc.${region}.amazonaws.com`
   const portalBase = 'https://portal.sso.us-east-1.amazonaws.com'
   const startUrl = 'https://view.awsapps.com/start'
@@ -617,7 +621,7 @@ async function ssoDeviceAuth(bearerToken: string, region: string = 'us-east-1'):
   let interval = 1
 
   // Step 1: 注册 OIDC 客户端
-  console.log('[SSO] Step 1: Registering OIDC client...')
+  logMessage('[SSO] Step 1: Registering OIDC client...')
   try {
     const regRes = await fetch(`${oidcBase}/client/register`, {
       method: 'POST',
@@ -634,13 +638,13 @@ async function ssoDeviceAuth(bearerToken: string, region: string = 'us-east-1'):
     const regData = await regRes.json() as { clientId: string; clientSecret: string }
     clientId = regData.clientId
     clientSecret = regData.clientSecret
-    console.log(`[SSO] Client registered: ${clientId.substring(0, 30)}...`)
+    logMessage(`[SSO] Client registered: ${clientId.substring(0, 30)}...`)
   } catch (e) {
     return { success: false, error: `注册客户端失败: ${e}` }
   }
 
   // Step 2: 发起设备授权
-  console.log('[SSO] Step 2: Starting device authorization...')
+  logMessage('[SSO] Step 2: Starting device authorization...')
   try {
     const devRes = await fetch(`${oidcBase}/device_authorization`, {
       method: 'POST',
@@ -652,26 +656,26 @@ async function ssoDeviceAuth(bearerToken: string, region: string = 'us-east-1'):
     deviceCode = devData.deviceCode
     userCode = devData.userCode
     interval = devData.interval || 1
-    console.log(`[SSO] Device code obtained, user_code: ${userCode}`)
+    logMessage(`[SSO] Device code obtained, user_code: ${userCode}`)
   } catch (e) {
     return { success: false, error: `设备授权失败: ${e}` }
   }
 
   // Step 3: 验证 Bearer Token (whoAmI)
-  console.log('[SSO] Step 3: Verifying bearer token...')
+  logMessage('[SSO] Step 3: Verifying bearer token...')
   try {
     const whoRes = await fetch(`${portalBase}/token/whoAmI`, {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${bearerToken}`, 'Accept': 'application/json' }
     })
     if (!whoRes.ok) throw new Error(`whoAmI failed: ${whoRes.status}`)
-    console.log('[SSO] Bearer token verified')
+    logMessage('[SSO] Bearer token verified')
   } catch (e) {
     return { success: false, error: `Token 验证失败: ${e}` }
   }
 
   // Step 4: 获取设备会话令牌
-  console.log('[SSO] Step 4: Getting device session token...')
+  logMessage('[SSO] Step 4: Getting device session token...')
   try {
     const sessRes = await fetch(`${portalBase}/session/device`, {
       method: 'POST',
@@ -681,13 +685,13 @@ async function ssoDeviceAuth(bearerToken: string, region: string = 'us-east-1'):
     if (!sessRes.ok) throw new Error(`Device session failed: ${sessRes.status}`)
     const sessData = await sessRes.json() as { token: string }
     deviceSessionToken = sessData.token
-    console.log('[SSO] Device session token obtained')
+    logMessage('[SSO] Device session token obtained')
   } catch (e) {
     return { success: false, error: `获取设备会话失败: ${e}` }
   }
 
   // Step 5: 接受用户代码
-  console.log('[SSO] Step 5: Accepting user code...')
+  logMessage('[SSO] Step 5: Accepting user code...')
   let deviceContext: { deviceContextId?: string; clientId?: string; clientType?: string } | null = null
   try {
     const acceptRes = await fetch(`${oidcBase}/device_authorization/accept_user_code`, {
@@ -698,14 +702,14 @@ async function ssoDeviceAuth(bearerToken: string, region: string = 'us-east-1'):
     if (!acceptRes.ok) throw new Error(`Accept user code failed: ${acceptRes.status}`)
     const acceptData = await acceptRes.json() as { deviceContext?: { deviceContextId?: string; clientId?: string; clientType?: string } }
     deviceContext = acceptData.deviceContext || null
-    console.log('[SSO] User code accepted')
+    logMessage('[SSO] User code accepted')
   } catch (e) {
     return { success: false, error: `接受用户代码失败: ${e}` }
   }
 
   // Step 6: 批准授权
   if (deviceContext?.deviceContextId) {
-    console.log('[SSO] Step 6: Approving authorization...')
+    logMessage('[SSO] Step 6: Approving authorization...')
     try {
       const approveRes = await fetch(`${oidcBase}/device_authorization/associate_token`, {
         method: 'POST',
@@ -720,14 +724,14 @@ async function ssoDeviceAuth(bearerToken: string, region: string = 'us-east-1'):
         })
       })
       if (!approveRes.ok) throw new Error(`Approve failed: ${approveRes.status}`)
-      console.log('[SSO] Authorization approved')
+      logMessage('[SSO] Authorization approved')
     } catch (e) {
       return { success: false, error: `批准授权失败: ${e}` }
     }
   }
 
   // Step 7: 轮询获取 Token
-  console.log('[SSO] Step 7: Polling for token...')
+  logMessage('[SSO] Step 7: Polling for token...')
   const startTime = Date.now()
   const timeout = 120000 // 2 分钟超时
 
@@ -748,7 +752,7 @@ async function ssoDeviceAuth(bearerToken: string, region: string = 'us-east-1'):
 
       if (tokenRes.ok) {
         const tokenData = await tokenRes.json() as { accessToken: string; refreshToken: string; expiresIn?: number }
-        console.log('[SSO] Token obtained successfully!')
+        logMessage('[SSO] Token obtained successfully!')
         return {
           success: true,
           accessToken: tokenData.accessToken,
@@ -5456,12 +5460,154 @@ app.whenReady().then(async () => {
       filters: [{ name: 'JSON', extensions: ['json'] }],
       properties: ['openFile']
     })
-    
+
     if (result.canceled || !result.filePaths[0]) {
       return { success: false, error: '用户取消' }
     }
-    
+
     return await machineIdModule.restoreMachineIdFromFile(result.filePaths[0])
+  })
+
+  // ============ AWS 自动注册 IPC 处理程序 ============
+  ipcMain.handle('auto-register:aws', async (_event, options: {
+    email: string | null
+    proxyUrl?: string
+    testLoginDetection?: boolean
+    keepBrowserOpen?: boolean
+    mailServiceConfig?: {
+      enabled: boolean
+      apiUrl: string
+      apiKey: string
+      mailDomain: string
+    }
+  }) => {
+    const { autoRegisterAWS } = await import('./autoRegister')
+    const logCallback = (message: string) => {
+      mainWindow?.webContents.send('auto-register:log', {
+        email: options.email || '(自动生成)',
+        message: message
+      })
+    }
+    return await autoRegisterAWS(
+      options.email,
+      logCallback,
+      options.proxyUrl,
+      options.testLoginDetection,
+      options.keepBrowserOpen,
+      options.mailServiceConfig
+    )
+  })
+
+  ipcMain.handle('auto-register:activate-outlook', async (_event, email: string, password: string) => {
+    const { activateOutlook } = await import('./autoRegister')
+    const logCallback = (message: string) => {
+      mainWindow?.webContents.send('auto-register:log', {
+        email: email,
+        message: message
+      })
+    }
+    return await activateOutlook(email, password, logCallback)
+  })
+
+  // ============ 设备同步 IPC 处理程序 ============
+  ipcMain.handle('device-connection:connect', async (_event, config: {
+    serverUrl: string
+    authToken: string
+    deviceId: string
+    deviceName: string
+    accountType: string
+  }) => {
+    const { deviceConnectionService } = await import('./deviceConnection')
+    deviceConnectionService.connect(
+      config.serverUrl,
+      config.authToken,
+      config.deviceId,
+      config.deviceName,
+      config.accountType
+    )
+    return { success: true }
+  })
+
+  ipcMain.handle('device-connection:disconnect', async () => {
+    const { deviceConnectionService } = await import('./deviceConnection')
+    deviceConnectionService.disconnect()
+    return { success: true }
+  })
+
+  ipcMain.handle('device-connection:is-connected', async () => {
+    const { deviceConnectionService } = await import('./deviceConnection')
+    return deviceConnectionService.isConnected()
+  })
+
+  // 打开文件选择对话框
+  ipcMain.handle('dialog:openFile', async (_event, options) => {
+    const { dialog } = await import('electron')
+    const result = await dialog.showOpenDialog({
+      title: options?.title || '选择文件',
+      filters: options?.filters || [],
+      properties: options?.properties || ['openFile']
+    })
+    return result
+  })
+
+  // 读取文件内容
+  ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
+    try {
+      const fs = await import('fs/promises')
+      const content = await fs.readFile(filePath, 'utf-8')
+      return { success: true, content }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '读取文件失败'
+      }
+    }
+  })
+
+  // 获取设备信息
+  ipcMain.handle('system:getDeviceInfo', async () => {
+    const os = await import('os')
+    const crypto = await import('crypto')
+
+    // 生成设备唯一标识
+    const deviceId = crypto.createHash('md5')
+      .update(os.hostname() + os.platform() + os.arch())
+      .digest('hex')
+
+    return {
+      platform: process.platform,
+      arch: process.arch,
+      hostname: os.hostname(),
+      cpus: os.cpus().length,
+      memory: os.totalmem(),
+      deviceId: deviceId,
+      deviceName: os.hostname(),
+      deviceType: 'desktop' as const
+    }
+  })
+
+  // 测试邮箱服务
+  ipcMain.handle('mail-service:test', async (_event, config) => {
+    try {
+      const { MailService } = await import('./mailService')
+      const mailService = new MailService({
+        enabled: true,
+        apiUrl: config.apiUrl,
+        apiKey: config.apiKey,
+        mailDomain: config.mailDomain
+      })
+      const isHealthy = await mailService.checkHealth()
+      if (isHealthy) {
+        return { success: true, message: '邮箱服务配置有效' }
+      } else {
+        return { success: false, error: '邮箱服务不可用' }
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '测试失败'
+      }
+    }
   })
 
   // 更新协议处理函数以支持 Social Auth 回调

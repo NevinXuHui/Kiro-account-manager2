@@ -415,6 +415,107 @@ const api = {
     return ipcRenderer.invoke('machine-id:restore-from-file')
   },
 
+  // ============ AWS 自动注册 API ============
+
+  // AWS Builder ID 自动注册
+  autoRegisterAWS: (options: {
+    email: string | null
+    proxyUrl?: string
+    testLoginDetection?: boolean
+    keepBrowserOpen?: boolean
+    mailServiceConfig?: {
+      enabled: boolean
+      apiUrl: string
+      apiKey: string
+      mailDomain: string
+    }
+  }): Promise<{
+    success: boolean
+    ssoToken?: string
+    name?: string
+    accessToken?: string
+    refreshToken?: string
+    error?: string
+  }> => {
+    return ipcRenderer.invoke('auto-register:aws', options)
+  },
+
+  // 激活 Outlook 邮箱
+  activateOutlook: (email: string, password: string): Promise<{
+    success: boolean
+    error?: string
+  }> => {
+    return ipcRenderer.invoke('auto-register:activate-outlook', email, password)
+  },
+
+  // ============ 设备同步 API ============
+
+  // 连接设备同步服务
+  deviceConnectionConnect: (config: {
+    serverUrl: string
+    authToken: string
+    deviceId: string
+    deviceName: string
+    accountType: string
+  }): Promise<{ success: boolean }> => {
+    return ipcRenderer.invoke('device-connection:connect', config)
+  },
+
+  // 断开设备同步服务
+  deviceConnectionDisconnect: (): Promise<{ success: boolean }> => {
+    return ipcRenderer.invoke('device-connection:disconnect')
+  },
+
+  // 检查设备同步连接状态
+  deviceConnectionIsConnected: (): Promise<boolean> => {
+    return ipcRenderer.invoke('device-connection:is-connected')
+  },
+
+  // 监听自动注册日志
+  onAutoRegisterLog: (callback: (data: { email: string; message: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { email: string; message: string }) => {
+      callback(data)
+    }
+    ipcRenderer.on('auto-register:log', listener)
+    return () => {
+      ipcRenderer.removeListener('auto-register:log', listener)
+    }
+  },
+
+  // 打开文件选择对话框
+  openFile: (options?: {
+    title?: string
+    filters?: Array<{ name: string; extensions: string[] }>
+    properties?: Array<'openFile' | 'openDirectory' | 'multiSelections'>
+  }): Promise<{ canceled: boolean; filePaths: string[] }> => {
+    return ipcRenderer.invoke('dialog:openFile', options)
+  },
+
+  // 读取文件内容
+  readFile: (filePath: string): Promise<{ success: boolean; content?: string; error?: string }> => {
+    return ipcRenderer.invoke('fs:readFile', filePath)
+  },
+
+  // 获取设备信息
+  getDeviceInfo: (): Promise<{
+    platform: string
+    arch: string
+    hostname: string
+    cpus: number
+    memory: number
+  }> => {
+    return ipcRenderer.invoke('system:getDeviceInfo')
+  },
+
+  // 测试邮箱服务
+  testMailService: (config: {
+    apiUrl: string
+    apiKey: string
+    mailDomain: string
+  }): Promise<{ success: boolean; error?: string; message?: string }> => {
+    return ipcRenderer.invoke('mail-service:test', config)
+  },
+
   // ============ 自动更新 ============
   
   // 检查更新 (electron-updater)
