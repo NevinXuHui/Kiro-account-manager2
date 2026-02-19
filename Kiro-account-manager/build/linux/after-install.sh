@@ -32,3 +32,17 @@ if [ -d "${OPT_DIR}" ] && [ ! -L "${OPT_DIR}" ]; then
     ln -sf "${OPT_DIR_NOSPACE}/${APP_DIR_NOSPACE}" "/usr/bin/${APP_DIR_NOSPACE}"
   fi
 fi
+
+# 3. 更新桌面数据库和图标缓存（使应用出现在应用菜单中）
+if command -v update-desktop-database > /dev/null 2>&1; then
+  update-desktop-database /usr/share/applications || true
+fi
+
+if command -v gtk-update-icon-cache > /dev/null 2>&1; then
+  gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+fi
+
+# 4. 刷新 MIME 类型数据库（支持 kiro:// 协议）
+if command -v update-mime-database > /dev/null 2>&1; then
+  update-mime-database /usr/share/mime || true
+fi

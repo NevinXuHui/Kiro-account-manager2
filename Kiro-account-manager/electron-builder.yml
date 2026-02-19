@@ -53,6 +53,7 @@ linux:
   executableName: kiro-account-manager
   maintainer: electronjs.org
   category: Utility
+  icon: build/icons
 deb:
   afterInstall: build/linux/after-install.sh
   afterRemove: build/linux/after-remove.sh
