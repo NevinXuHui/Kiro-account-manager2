@@ -67,16 +67,49 @@ if [ $# -gt 0 ]; then
     esac
 fi
 
+# 清除已运行的 Kiro 进程
+print_info "检查并清除已运行的 Kiro 进程..."
+KIRO_PIDS=$(ps aux | grep -E "kiro-account-manager|electron.*Kiro" | grep -v grep | awk '{print $2}')
+if [ -n "$KIRO_PIDS" ]; then
+    print_warn "发现正在运行的 Kiro 进程，正在终止..."
+    echo "$KIRO_PIDS" | xargs kill -9 2>/dev/null || true
+    sleep 1
+    print_info "✓ 已清除所有 Kiro 进程"
+else
+    print_info "✓ 没有正在运行的 Kiro 进程"
+fi
+
+# 检查是否需要虚拟显示
+USE_XVFB=false
+if [ -z "$DISPLAY" ]; then
+    print_warn "未检测到显示环境 (DISPLAY 未设置)"
+    if command -v xvfb-run &> /dev/null; then
+        print_info "使用 Xvfb 虚拟显示"
+        USE_XVFB=true
+    else
+        print_warn "建议安装 Xvfb: sudo apt-get install xvfb"
+        print_warn "或配置 X11 转发: ssh -X user@host"
+    fi
+fi
+
 # 执行对应命令
 print_info "启动模式: $MODE"
 case "$MODE" in
     dev)
         print_info "启动开发服务器..."
-        npm run dev
+        if [ "$USE_XVFB" = true ]; then
+            xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run dev
+        else
+            npm run dev
+        fi
         ;;
     start)
         print_info "启动预览模式..."
-        npm run start
+        if [ "$USE_XVFB" = true ]; then
+            xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm run start
+        else
+            npm run start
+        fi
         ;;
     build)
         print_info "开始构建..."
