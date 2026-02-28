@@ -45,8 +45,14 @@ function generateRandomName(): string {
  */
 function generateUserCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // 排除容易混淆的字符 (I, O, 0, 1)
-  const part1 = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-  const part2 = Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const part1 = Array.from(
+    { length: 4 },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join('')
+  const part2 = Array.from(
+    { length: 4 },
+    () => chars[Math.floor(Math.random() * chars.length)]
+  ).join('')
   return `${part1}-${part2}`
 }
 
@@ -97,11 +103,7 @@ async function waitForPageStable(
  * @param element 目标元素
  * @param log 日志回调函数
  */
-async function moveMouseToElement(
-  page: Page,
-  element: Locator,
-  log: LogCallback
-): Promise<void> {
+async function moveMouseToElement(page: Page, element: Locator, log: LogCallback): Promise<void> {
   try {
     // 获取元素的边界框
     const box = await element.boundingBox()
@@ -628,12 +630,14 @@ async function waitAndClickWithRetry(
   log: LogCallback,
   description: string,
   timeout: number = 30000,
-  maxRetries: number = 1  // 默认不重试，失败直接报错
+  maxRetries: number = 1 // 默认不重试，失败直接报错
 ): Promise<boolean> {
   let retryCount = 0
 
   while (retryCount < maxRetries) {
-    log(`等待${description}出现...${maxRetries > 1 ? ` (尝试 ${retryCount + 1}/${maxRetries})` : ''}`)
+    log(
+      `等待${description}出现...${maxRetries > 1 ? ` (尝试 ${retryCount + 1}/${maxRetries})` : ''}`
+    )
     try {
       const element = page.locator(selector).first()
 
@@ -709,7 +713,9 @@ export async function activateOutlook(
     })
 
     const context = await browser.newContext({
-      viewport: { width: viewportWidth, height: viewportHeight },
+      // 移除固定 viewport，让浏览器使用最大化窗口尺寸
+      // viewport: { width: viewportWidth, height: viewportHeight },
+      viewport: null, // 使用实际窗口大小
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     })
@@ -1022,7 +1028,7 @@ export async function autoRegisterAWS(
     })
 
     const context = await browser.newContext({
-      viewport: fingerprint.viewport,
+      viewport: null, // 移除固定 viewport，让浏览器使用最大化窗口尺寸
       userAgent: fingerprint.userAgent,
       locale: 'en-US', // 固定使用英语
       timezoneId: 'America/New_York', // 固定使用美国东部时区
@@ -1086,7 +1092,9 @@ export async function autoRegisterAWS(
       })
     })
 
-    log('✓ 已设置页面初始化脚本（清除所有浏览器存储：Cookies、Storage、IndexedDB、Cache、Service Workers）')
+    log(
+      '✓ 已设置页面初始化脚本（清除所有浏览器存储：Cookies、Storage、IndexedDB、Cache、Service Workers）'
+    )
 
     const registerUrl = `https://view.awsapps.com/start/#/device?user_code=${userCode}`
     log(`访问注册页面: ${registerUrl}`)
@@ -1108,7 +1116,9 @@ export async function autoRegisterAWS(
     // 等待邮箱输入框出现并自动填入邮箱
     // 选择器: input[placeholder="username@example.com"]
     const emailInputSelector = 'input[placeholder="username@example.com"]'
-    if (!(await waitAndFill(page, emailInputSelector, email, log, '邮箱输入框', 30000, 999, false))) {
+    if (
+      !(await waitAndFill(page, emailInputSelector, email, log, '邮箱输入框', 30000, 999, false))
+    ) {
       throw new Error('未找到邮箱输入框')
     }
 
@@ -1155,7 +1165,10 @@ export async function autoRegisterAWS(
       // 优先检测姓名输入框（注册流程的明确标志）
       // 尝试多个选择器
       const nameInputPromises = nameInputSelectors.map((selector, index) =>
-        page.locator(selector).first().waitFor({ state: 'visible', timeout: 10000 })
+        page
+          .locator(selector)
+          .first()
+          .waitFor({ state: 'visible', timeout: 10000 })
           .then(() => `register-${index}`)
       )
 
@@ -1239,7 +1252,17 @@ export async function autoRegisterAWS(
         // 步骤2(登录): 输入密码
         log('\n步骤2(登录): 输入密码...')
         const loginPasswordSelector = 'input[placeholder="Enter password"]'
-        if (!(await waitAndFill(page, loginPasswordSelector, password, log, '登录密码输入框', 30000, 999))) {
+        if (
+          !(await waitAndFill(
+            page,
+            loginPasswordSelector,
+            password,
+            log,
+            '登录密码输入框',
+            30000,
+            999
+          ))
+        ) {
           throw new Error('未找到登录密码输入框')
         }
 
@@ -1303,8 +1326,8 @@ export async function autoRegisterAWS(
           const code = await mailService.waitForVerificationCode(
             tempMailbox.email,
             tempMailbox.password,
-            5 * 60 * 1000,  // 5 分钟超时
-            5000            // 每 5 秒检查一次
+            5 * 60 * 1000, // 5 分钟超时
+            5000 // 每 5 秒检查一次
           )
           log(`✓ 自动获取验证码: ${code}`)
 
@@ -1345,7 +1368,10 @@ export async function autoRegisterAWS(
 
       try {
         // 检测密码输入框是否出现
-        await page.locator(passwordInputSelector).first().waitFor({ state: 'visible', timeout: 10000 })
+        await page
+          .locator(passwordInputSelector)
+          .first()
+          .waitFor({ state: 'visible', timeout: 10000 })
         log('✓ 检测到密码输入框，开始输入密码...')
 
         // 输入密码
@@ -1448,8 +1474,8 @@ export async function autoRegisterAWS(
           const code = await mailService.waitForVerificationCode(
             tempMailbox.email,
             tempMailbox.password,
-            5 * 60 * 1000,  // 5 分钟超时
-            5000            // 每 5 秒检查一次
+            5 * 60 * 1000, // 5 分钟超时
+            5000 // 每 5 秒检查一次
           )
           log(`✓ 自动获取验证码: ${code}`)
 
@@ -1514,7 +1540,7 @@ export async function autoRegisterAWS(
           if (!isVisible) continue
 
           const placeholderLower = (placeholder || '').toLowerCase()
-          const isConfirm = confirmKeywords.some(keyword => placeholderLower.includes(keyword))
+          const isConfirm = confirmKeywords.some((keyword) => placeholderLower.includes(keyword))
 
           if (isConfirm) {
             confirmPasswordInput = input
@@ -1579,7 +1605,8 @@ export async function autoRegisterAWS(
     log('\n步骤5: 获取 SSO Token...')
     let ssoToken: string | null = null
 
-    for (let i = 0; i < 999; i++) {  // 设置为999次，实现"无限"重试
+    for (let i = 0; i < 999; i++) {
+      // 设置为999次，实现"无限"重试
       const cookies = await context.cookies()
       const ssoCookie = cookies.find((c) => c.name === 'x-amz-sso_authn')
       if (ssoCookie) {
@@ -1603,7 +1630,9 @@ export async function autoRegisterAWS(
             const id = await button.getAttribute('id').catch(() => null)
             const isVisible = await button.isVisible().catch(() => false)
 
-            log(`[调试] Button ${i + 1}: text="${text}", id="${id}", class="${className}", data-testid="${dataTestId}", visible=${isVisible}`)
+            log(
+              `[调试] Button ${i + 1}: text="${text}", id="${id}", class="${className}", data-testid="${dataTestId}", visible=${isVisible}`
+            )
 
             if (isVisible) {
               visibleButtons.push({ button, text, dataTestId, className, id })
@@ -1623,12 +1652,22 @@ export async function autoRegisterAWS(
               await page.waitForTimeout(randomDelay(2000))
             } else {
               // 如果有多个按钮，尝试根据文本内容判断
-              const confirmKeywords = ['确认', 'confirm', 'continue', '完成', 'finish', 'done', 'ok', 'allow', '允许']
+              const confirmKeywords = [
+                '确认',
+                'confirm',
+                'continue',
+                '完成',
+                'finish',
+                'done',
+                'ok',
+                'allow',
+                '允许'
+              ]
               let clicked = false
 
               for (const { button, text } of visibleButtons) {
                 const textLower = (text || '').toLowerCase()
-                if (confirmKeywords.some(keyword => textLower.includes(keyword))) {
+                if (confirmKeywords.some((keyword) => textLower.includes(keyword))) {
                   log(`点击确认按钮: "${text}"`)
                   await button.click()
                   log('✓ 已点击确认按钮')
