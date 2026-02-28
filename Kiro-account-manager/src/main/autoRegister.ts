@@ -1031,8 +1031,8 @@ export async function autoRegisterAWS(
       viewport: null, // 移除固定 viewport，让浏览器使用最大化窗口尺寸
       userAgent: fingerprint.userAgent,
       locale: 'en-US', // 固定使用英语
-      timezoneId: 'America/New_York', // 固定使用美国东部时区
-      deviceScaleFactor: fingerprint.deviceScaleFactor
+      timezoneId: 'America/New_York' // 固定使用美国东部时区
+      // deviceScaleFactor 与 viewport: null 不兼容，已移除
     })
 
     // 彻底清除浏览器数据（在访问页面之前）
