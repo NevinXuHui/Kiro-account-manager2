@@ -118,8 +118,11 @@ async function moveMouseToElement(page: Page, element: Locator, log: LogCallback
 
     // 获取当前鼠标位置（如果是第一次，从随机起点开始）
     const viewport = page.viewportSize()
-    const startX = Math.random() * (viewport?.width || 1200)
-    const startY = Math.random() * (viewport?.height || 800)
+    // 当 viewport 为 null 时（最大化窗口），使用实际窗口大小
+    const viewportWidth = viewport?.width || 1920
+    const viewportHeight = viewport?.height || 1080
+    const startX = Math.random() * viewportWidth
+    const startY = Math.random() * viewportHeight
 
     // 计算移动步数（根据距离决定）
     const distance = Math.sqrt(Math.pow(targetX - startX, 2) + Math.pow(targetY - startY, 2))
